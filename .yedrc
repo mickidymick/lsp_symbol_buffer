@@ -1,0 +1,12 @@
+plugins-add-dir           "~/tmp_yed/new_plugins/lsp_symbol_menu"
+plugin-load               "lsp_symbol_menu"
+
+set "mouse-menu-on-word"      "Paste paste-yank-buffer                                                                            \
+                              'Jump to Definition' 'multi jump-stack-push ctags-jump-to-definition'                               \
+                               Manpage 'man-word'                                                                                 \
+                               Convert convert-number                                                                             \
+                              "
+#                               'LSP Info' lsp-info"
+
+plugin-unload             "ypm/plugins/lsp_info_popup"
+set builder-build-command "./build.sh"
