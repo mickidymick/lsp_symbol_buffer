@@ -60,14 +60,6 @@ do {                                                       \
 #define DBG(...) ;
 #endif
 
-/* global structs */
-// struct Position {
-//     size_t line;
-//     size_t character;
-
-//     Position(size_t line, size_t character) : line(line), character(character) {}
-// };
-
 typedef struct {
     size_t line;
     size_t character;
@@ -85,7 +77,6 @@ typedef struct {
     yed_buffer *buffer;
     char        name[512];
     string      uri;
-//     Position    pos = Position(-1, -1);
     position    pos;
     int         menu_row;
     int         row;
@@ -98,25 +89,26 @@ typedef struct {
     item       *type_definition;
     item       *implementation;
     item       *references[1024];
+    int         ref_size;
 } symbol;
 
 /* global variables */
 static yed_plugin *Self;
 static yed_frame  *last_frame = NULL;
 static array_t     symbols;
-// static Position    pos = Position(-1, -1);
 static position    pos;
 static string      uri;
 static time_t      last_time;
 static time_t      wait_time;
 static int         sub = 0;
 static int         tot = 1;
+static int         has_declaration;
 
 /* global functions */
 static yed_buffer *_get_or_make_buff(void);
 static string      uri_for_buffer(yed_buffer *buffer);
-// static Position    position_in_frame(yed_frame *frame);
 static position    position_in_frame(yed_frame *frame);
+static char       *trim_leading_whitespace(char *str);
 
 static yed_buffer *_get_or_make_buff(void) {
     yed_buffer *buff;
@@ -148,21 +140,6 @@ static string uri_for_buffer(yed_buffer *buffer) {
     return uri;
 }
 
-// static Position position_in_frame(yed_frame *frame) {
-//     yed_line *line;
-
-//     if (frame == NULL || frame->buffer == NULL) {
-//         return Position(-1, -1);
-//     }
-
-//     line = yed_buff_get_line(frame->buffer, frame->cursor_line);
-//     if (line == NULL) {
-//         return Position(-1, -1);
-//     }
-
-//     return Position(frame->cursor_line - 1, yed_line_col_to_idx(line, frame->cursor_col));
-// }
-
 static position position_in_frame(yed_frame *frame) {
     yed_line *line;
     position  tmp_pos;
@@ -183,6 +160,11 @@ static position position_in_frame(yed_frame *frame) {
     tmp_pos.line      = frame->cursor_line - 1;
     tmp_pos.character = yed_line_col_to_idx(line, frame->cursor_col);
     return tmp_pos;
+}
+
+static char *trim_leading_whitespace(char *str) {
+    while(isspace((unsigned char)*str)) str++;
+    return str;
 }
 
 #endif
