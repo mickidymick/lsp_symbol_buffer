@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# make clean
+make clean
 make
 
 # if [[ $(uname) == "Darwin" ]]; then

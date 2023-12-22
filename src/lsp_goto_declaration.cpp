@@ -87,6 +87,8 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
         s->declaration->row    = row;
         s->declaration->col    = col;
 
+        DBG("set declaration");
+
         char tmp_str[512];
         sprintf(tmp_str, "%d %s", row, s->declaration->line);
 
@@ -116,9 +118,9 @@ void goto_declaration_pmsg(yed_event *event) {
     }
 
     try {
-        DBG("Declaration");
+//         DBG("Declaration");
         auto j = json::parse(event->plugin_message.string_data);
-        DBG("%s",j.dump(2).c_str());
+//         DBG("%s",j.dump(2).c_str());
         const auto &r = j["result"];
 
         if (r.is_array()) {

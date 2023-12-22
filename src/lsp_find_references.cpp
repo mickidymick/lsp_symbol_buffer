@@ -117,9 +117,9 @@ void find_references_pmsg(yed_event *event) {
     }
 
     try {
-        DBG("References");
+//         DBG("References");
         auto j = json::parse(event->plugin_message.string_data);
-        DBG("%s",j.dump(2).c_str());
+//         DBG("%s",j.dump(2).c_str());
         const auto &r = j["result"];
 
         if (r.is_array()) {

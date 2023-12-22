@@ -93,16 +93,16 @@ typedef struct {
 } symbol;
 
 /* global variables */
-static yed_plugin *Self;
-static yed_frame  *last_frame = NULL;
-static array_t     symbols;
-static position    pos;
-static string      uri;
-static time_t      last_time;
-static time_t      wait_time;
-static int         sub = 0;
-static int         tot = 1;
-static int         has_declaration;
+extern yed_plugin *Self;
+extern yed_frame  *last_frame;
+extern array_t     symbols;
+extern position    pos;
+extern string      uri;
+extern time_t      last_time;
+extern time_t      wait_time;
+extern int         sub;
+extern int         tot;
+extern int         has_declaration;
 
 /* global functions */
 static yed_buffer *_get_or_make_buff(void);

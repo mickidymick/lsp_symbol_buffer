@@ -140,9 +140,9 @@ void symbol_pmsg(yed_event *event) {
     }
 
     try {
-/*         DBG("Symbol"); */
+//         DBG("Symbol");
         auto j = json::parse(event->plugin_message.string_data);
-/*         DBG("%s", j.dump(2).c_str()); */
+//         DBG("%s", j.dump(2).c_str());
         const auto &r = j["result"];
 
         mp.clear();

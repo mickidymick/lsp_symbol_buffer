@@ -31,8 +31,6 @@ void goto_definition_request(yed_frame *frame) {
     event.plugin_message.string_data = text.c_str();
     event.ft                         = frame->buffer->ft;
 
-    DBG("row:%d col:%d", pos.line, pos.character);
-
     yed_trigger_event(&event);
 }
 
@@ -87,6 +85,8 @@ void goto_definition_get_range(const json &result, yed_event *event) {
         s->definition->row    = row;
         s->definition->col    = col;
 
+        DBG("set definition");
+
         char tmp_str[512];
         sprintf(tmp_str, "%d %s", row, s->definition->line);
 
@@ -116,9 +116,9 @@ void goto_definition_pmsg(yed_event *event) {
     }
 
     try {
-        DBG("Definition");
+//         DBG("Definition");
         auto j = json::parse(event->plugin_message.string_data);
-        DBG("%s",j.dump(2).c_str());
+//         DBG("%s",j.dump(2).c_str());
         const auto &r = j["result"];
 
         if (r.is_array()) {

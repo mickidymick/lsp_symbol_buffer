@@ -5,6 +5,17 @@
 #include "lsp_goto_implementation.h"
 #include "lsp_find_references.h"
 
+/* global variables */
+yed_plugin *Self;
+yed_frame  *last_frame = NULL;
+array_t     symbols;
+position    pos;
+string      uri;
+time_t      last_time;
+time_t      wait_time;
+int         sub = 0;
+int         tot = 1;
+int         has_declaration;
 
 /* internal functions*/
 static void        _lsp_symbol_menu(int n_args, char **args);
