@@ -234,7 +234,7 @@ static void _lsp_open_symbol(int loc, symbol *s) {
     // get declaration
     // symbol declaration
     // string str;
-    DBG("goto_declaration");
+//     DBG("goto_declaration");
     goto_declaration_request(last_frame);
 
     // get definition
@@ -253,7 +253,7 @@ static void _lsp_open_symbol(int loc, symbol *s) {
     // get references
     // any other location symbol is used
     // printf("%s\n", str);
-    DBG("find_references");
+//     DBG("find_references");
     s->ref_size = 0;
     find_references_request(last_frame);
 }
@@ -278,11 +278,14 @@ static void _lsp_close_symbol(void) {
 
 static void _lsp_symbol_menu_select(void) {
     symbol *s;
+    string  tmp_str1 = "special-buffer-prepare-unfocus";
+    string  tmp_str2 = "buffer";
+    string  tmp_str3 = "jump-stack-push";
+    int     loc;
 
     if (sub == 0) {
         sub = ys->active_frame->cursor_line - 1;
         s   = *(symbol **)array_item(symbols, sub);
-        DBG("%d", sub);
         if (s == NULL) {
             return;
         }
@@ -294,24 +297,47 @@ static void _lsp_symbol_menu_select(void) {
         _lsp_open_symbol(sub, s);
 
     } else {
-        if (ys->active_frame->cursor_line == 1) {
+        loc = ys->active_frame->cursor_line;
+        s   = *(symbol **)array_item(symbols, sub);
+
+        if (loc == 1) {
+            // back
             sub = 0;
-            s   = *(symbol **)array_item(symbols, sub);
             DBG("closed: %s", s->name);
             _lsp_close_symbol();
+
+        } else if (loc == 7 && s->declaration != NULL) {
+            // goto declaration
+            DBG("goto declaration");
+            YEXE((char *) tmp_str1.c_str(), s->declaration->buffer->path);
+            YEXE((char *) tmp_str3.c_str());
+            YEXE((char *) tmp_str2.c_str(), s->declaration->buffer->path);
+            if (ys->active_frame) {
+                yed_move_cursor_within_frame(ys->active_frame, s->declaration->row - ys->active_frame->cursor_line, s->declaration->col - ys->active_frame->cursor_col);
+            }
+
+        } else if (loc == 10 && s->definition != NULL) {
+            // goto definition
+            DBG("goto definition");
+            YEXE((char *) tmp_str1.c_str(), s->definition->buffer->path);
+            YEXE((char *) tmp_str3.c_str());
+            YEXE((char *) tmp_str2.c_str(), s->definition->buffer->path);
+            if (ys->active_frame) {
+                yed_move_cursor_within_frame(ys->active_frame, s->definition->row - ys->active_frame->cursor_line, s->definition->col - ys->active_frame->cursor_col);
+            }
+
+        } else if (loc >= 13 && loc <= (13 + s->ref_size - 1) && s->ref_size >= 1) {
+            // goto reference
+            DBG("goto references");
+            int new_loc = loc - 13;
+            YEXE((char *) tmp_str1.c_str(), s->references[new_loc]->buffer->path);
+            YEXE((char *) tmp_str3.c_str());
+            YEXE((char *) tmp_str2.c_str(), s->references[new_loc]->buffer->path);
+            if (ys->active_frame) {
+                yed_move_cursor_within_frame(ys->active_frame, s->references[new_loc]->row - ys->active_frame->cursor_line, s->references[new_loc]->col - ys->active_frame->cursor_col);
+            }
         }
     }
-
-//     if (f->flags == IS_DIR) {
-//         if (f->open_children) {
-//             _tree_view_remove_dir(ys->active_frame->cursor_line);
-//         } else {
-//             _tree_view_add_dir(ys->active_frame->cursor_line);
-//         }
-//     } else {
-//         YEXE("special-buffer-prepare-jump-focus", f->path);
-//         YEXE("buffer", f->path);
-//     }
 }
 
 static void _lsp_symbol_menu_line_handler(yed_event *event) {

@@ -31,8 +31,6 @@ void goto_declaration_request(yed_frame *frame) {
     event.plugin_message.string_data = text.c_str();
     event.ft                         = frame->buffer->ft;
 
-    DBG("row:%d col:%d", pos.line, pos.character);
-
     yed_trigger_event(&event);
 }
 
@@ -87,7 +85,7 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
         s->declaration->row    = row;
         s->declaration->col    = col;
 
-        DBG("set declaration");
+//         DBG("set declaration");
 
         char tmp_str[512];
         sprintf(tmp_str, "%d %s", row, s->declaration->line);

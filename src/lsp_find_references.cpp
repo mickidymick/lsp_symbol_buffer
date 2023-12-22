@@ -97,9 +97,9 @@ void find_references_get_range(const json &result, yed_event *event) {
             buffer1->flags &= ~BUFF_RD_ONLY;
 
             if (loc == 0) {
-                yed_buff_insert_string_no_undo(buffer1, "References", 15, 1);
+                yed_buff_insert_string_no_undo(buffer1, "References", 12, 1);
             }
-            yed_buff_insert_string_no_undo(buffer1, tmp_str, 16 + loc, 1);
+            yed_buff_insert_string_no_undo(buffer1, tmp_str, 13 + loc, 1);
             tot++;
             buffer1->flags |= BUFF_RD_ONLY;
         }

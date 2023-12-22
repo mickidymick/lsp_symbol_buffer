@@ -85,7 +85,7 @@ void goto_definition_get_range(const json &result, yed_event *event) {
         s->definition->row    = row;
         s->definition->col    = col;
 
-        DBG("set definition");
+//         DBG("set definition");
 
         char tmp_str[512];
         sprintf(tmp_str, "%d %s", row, s->definition->line);
