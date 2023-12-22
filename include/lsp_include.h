@@ -60,6 +60,8 @@ do {                                                       \
 #define DBG(...) ;
 #endif
 
+#define SYM_BUFFER (char *) symbol_buffer_name.c_str()
+
 typedef struct {
     size_t line;
     size_t character;
@@ -98,6 +100,7 @@ extern yed_frame  *last_frame;
 extern array_t     symbols;
 extern position    pos;
 extern string      uri;
+extern string      symbol_buffer_name;
 extern time_t      last_time;
 extern time_t      wait_time;
 extern int         sub;
@@ -113,10 +116,10 @@ static char       *trim_leading_whitespace(char *str);
 static yed_buffer *_get_or_make_buff(void) {
     yed_buffer *buff;
 
-    buff = yed_get_buffer("*symbol-menu");
+    buff = yed_get_buffer(SYM_BUFFER);
 
     if (buff == NULL) {
-        buff = yed_create_buffer("*symbol-menu");
+        buff = yed_create_buffer(SYM_BUFFER);
         buff->flags |= BUFF_RD_ONLY | BUFF_SPECIAL;
     }
 

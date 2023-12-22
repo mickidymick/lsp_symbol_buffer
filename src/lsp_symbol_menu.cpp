@@ -11,6 +11,7 @@ yed_frame  *last_frame = NULL;
 array_t     symbols;
 position    pos;
 string      uri;
+string      symbol_buffer_name = "*symbol-menu";
 time_t      last_time;
 time_t      wait_time;
 int         sub = 0;
@@ -18,24 +19,22 @@ int         tot = 1;
 int         has_declaration;
 
 /* internal functions*/
-static void        _lsp_symbol_menu(int n_args, char **args);
-static void        _lsp_symbol_menu_init(void);
-static void        _lsp_open_symbol(int loc, symbol *s);
-static void        _lsp_close_symbol(void);
-// static void        _lsp_symbol_menu_add_dir(int idx);
-// static void        _lsp_symbol_menu_remove_dir(int idx);
-static void        _lsp_symbol_menu_select(void);
-static void        _lsp_symbol_menu_line_handler(yed_event *event);
-static void        _lsp_symbol_menu_key_pressed_handler(yed_event *event);
-static void        _lsp_symbol_menu_update_handler(yed_event *event);
-static void        _lsp_symbol_menu_unload(yed_plugin *self);
+static void _lsp_symbol_menu(int n_args, char **args);
+static void _lsp_symbol_menu_init(void);
+static void _lsp_open_symbol(int loc, symbol *s);
+static void _lsp_close_symbol(void);
+static void _lsp_symbol_menu_select(void);
+static void _lsp_symbol_menu_line_handler(yed_event *event);
+static void _lsp_symbol_menu_key_pressed_handler(yed_event *event);
+static void _lsp_symbol_menu_update_handler(yed_event *event);
+static void _lsp_symbol_menu_unload(yed_plugin *self);
 
 /* internal helper functions */
-static void        _add_hidden_items(void);
-static void        _add_archive_extensions(void);
-static void        _add_image_extensions(void);
-static void        _clear_symbols(void);
-static int         _cmpfunc(const void *a, const void *b);
+static void _add_hidden_items(void);
+static void _add_archive_extensions(void);
+static void _add_image_extensions(void);
+static void _clear_symbols(void);
+static int  _cmpfunc(const void *a, const void *b);
 // static file       *_init_file(int parent_idx, char *path, char *name,
 //                               int if_dir, int num_tabs, int color_loc);
 
@@ -168,10 +167,12 @@ static void _lsp_symbol_menu(int n_args, char **args) {
         _lsp_symbol_menu_init();
     }
 
-    YEXE("special-buffer-prepare-focus", "*symbol-menu");
+    string tmp_str1 = "special-buffer-prepare-focus";
+    YEXE((char *) tmp_str1.c_str(), SYM_BUFFER);
 
     if (ys->active_frame) {
-        YEXE("buffer", "*symbol-menu");
+        string tmp_str2 = "buffer";
+        YEXE((char *) tmp_str2.c_str(), SYM_BUFFER);
     }
 
     yed_set_cursor_far_within_frame(ys->active_frame, 1, 1);
@@ -274,195 +275,6 @@ static void _lsp_close_symbol(void) {
         symbol_request(ys->active_frame);
     }
 }
-
-/*
-static void _tree_view_add_dir(int idx) {
-    char          **str_it;
-    file          **f_it;
-    file           *f;
-    file           *new_f;
-    yed_buffer     *buff;
-    struct dirent  *de;
-    DIR            *dr;
-    FILE           *fs;
-    int             new_idx;
-    int             dir;
-    int             tabs;
-    int             i;
-    int             j;
-    int             color_loc;
-    char            path[1024];
-    char            name[512];
-    char            write_name[512];
-    struct stat     statbuf;
-    array_t         tmp_files;
-    int             loc;
-
-    tmp_files = array_make(file *);
-
-    buff = _get_or_make_buff();
-    f    = *(file **)array_item(files, idx);
-    dr   = opendir(f->path);
-
-    if (dr == NULL) { return; }
-
-    buff->flags &= ~BUFF_RD_ONLY;
-
-    new_idx = idx+1;
-    while ((de = readdir(dr)) != NULL) {
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) {
-            continue;
-        }
-
-        array_traverse(hidden_items, str_it) {
-            if (strstr(de->d_name, (*str_it))) {
-                goto cont;
-            }
-        }
-
-        if (new_idx > 1) {
-            yed_buff_insert_line_no_undo(buff, new_idx);
-        }
-
-        f->open_children = 1;
-
-        memset(path, 0, sizeof(char[512]));
-        sprintf(path, "%s/%s", f->path, de->d_name);
-
-        tabs = f->num_tabs+1;
-        memset(name, 0, sizeof(char[512]));
-        strcat(name, de->d_name);
-
-        dir = 0;
-        if (lstat(path, &statbuf) == 0) {
-            switch (statbuf.st_mode & S_IFMT) {
-                case S_IFDIR:
-                    dir = IS_DIR;
-                    break;
-                case S_IFLNK:
-                    fs = fopen(path, "r");
-                    if (!fs && errno == 2) {
-                        dir = IS_B_LINK;
-                    } else {
-                        dir = IS_LINK;
-                    }
-                    break;
-                case S_IFBLK:
-                case S_IFCHR:
-                    dir = IS_DEVICE;
-                    break;
-                default:
-                    if (statbuf.st_mode & S_IXUSR) {
-                        dir = IS_EXEC;
-                    } else {
-                        array_traverse(archive_extensions, str_it) {
-                            if (strstr(de->d_name, (*str_it))) {
-                                dir = IS_ARCHIVE;
-                                goto break_switch;
-                            }
-                        }
-
-                        array_traverse(image_extensions, str_it) {
-                            if (strstr(de->d_name, (*str_it))) {
-                                dir = IS_IMAGE;
-                                goto break_switch;
-                            }
-                        }
-
-                        dir = IS_FILE;
-                    }
-                    break;
-            }
-        }
-break_switch:;
-        color_loc = 0;
-        new_f = _init_file(idx, path, name, dir, tabs, color_loc);
-
-        array_push(tmp_files, new_f);
-
-        new_idx++;
-
-cont:;
-    }
-
-    closedir(dr);
-
-    qsort(array_data(tmp_files), array_len(tmp_files), sizeof(file *), _cmpfunc);
-
-    new_idx = idx+1;
-    loc = 0;
-    array_traverse(tmp_files, f_it) {
-        color_loc = (*f_it)->num_tabs * yed_get_tab_width();
-        memset(write_name, 0, sizeof(char[512]));
-
-        if ((*f_it)->num_tabs > 0) {
-            color_loc += 1;
-
-            for  (i = 0; i < (*f_it)->num_tabs; i++) {
-                strcat(write_name, yed_get_var("tree-view-child-char-i"));
-                for (j = 0; j < yed_get_tab_width()-1; j++) {
-                    strcat(write_name, " ");
-                }
-            }
-
-            if (loc == array_len(tmp_files)-1) {
-                strcat(write_name, yed_get_var("tree-view-child-char-l"));
-            } else {
-                strcat(write_name, yed_get_var("tree-view-child-char-t"));
-            }
-
-            strcat(write_name, (*f_it)->name);
-            yed_buff_insert_string_no_undo(buff, write_name, new_idx, 1);
-        } else {
-            yed_buff_insert_string_no_undo(buff, (*f_it)->name, new_idx, 1);
-        }
-
-        (*f_it)->color_loc = color_loc;
-
-        if (new_idx >= array_len(files)) {
-            array_push(files, (*f_it));
-        } else {
-            array_insert(files, new_idx, (*f_it));
-        }
-
-        new_idx++;
-        loc++;
-    }
-
-    buff->flags |= BUFF_RD_ONLY;
-    array_free(tmp_files);
-}
-
-static void _tree_view_remove_dir(int idx) {
-    yed_buffer *buff;
-    file       *f;
-    file       *remove;
-    int         next_idx;
-
-    next_idx = idx + 1;
-
-    buff = _get_or_make_buff();
-    buff->flags &= ~BUFF_RD_ONLY;
-
-    f = *(file **)array_item(files, idx);
-
-    remove = *(file **)array_item(files, next_idx);
-    while (array_len(files) > next_idx && remove && remove->num_tabs > f->num_tabs) {
-        free(remove);
-        array_delete(files, next_idx);
-        yed_buff_delete_line(buff, next_idx);
-
-        if (array_len(files) <= next_idx) {
-            break;
-        }
-        remove = *(file **)array_item(files, next_idx);
-    }
-
-    f->open_children = 0;
-
-    buff->flags |= BUFF_RD_ONLY;
-}
-*/
 
 static void _lsp_symbol_menu_select(void) {
     symbol *s;
@@ -622,7 +434,7 @@ static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
     ||  ys->interactive_command
     ||  !eframe
     ||  !eframe->buffer
-    ||  strcmp(eframe->buffer->name, "*symbol-menu")) {
+    ||  strcmp(eframe->buffer->name, SYM_BUFFER)) {
         return;
     }
 

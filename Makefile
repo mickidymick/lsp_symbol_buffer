@@ -6,7 +6,8 @@
 ifeq ($(uname),"Darwin")
 	WARN="-Wno-writable-strings -Wno-extern-c-compat"
 else
-	WARN="-Wno-write-strings -Wno-extern-c-compat"
+# 	WARN="-Wno-write-strings -Wno-extern-c-compat"
+	WARN="-Wwrite-strings"
 endif
 
 CXX        := g++
@@ -20,9 +21,9 @@ EXECUTABLE := lsp_symbol_menu.so
 all: $(BIN)/$(EXECUTABLE)
 
 $(BIN)/$(EXECUTABLE): $(SRC)/*.cpp
-	@echo "🚧 Building..."
+# 	@echo "🚧 Building..."
 	$(CXX) -I$(INCLUDE) $^ -o $@ $(CXX_FLAGS) $(YED_FLAGS)
 
 clean:
-	@echo "🧹 Clearing..."
+# 	@echo "🧹 Clearing..."
 	-rm $(BIN)/$(EXECUTABLE)
