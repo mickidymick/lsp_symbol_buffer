@@ -77,13 +77,19 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
         }
 
         col = yed_line_idx_to_col(line, byte);
+        byte = range["end"]["character"];
 
-        s                      = *(symbol **)array_item(symbols, sub);
-        s->declaration         = (item *)malloc(sizeof(item));
-        s->declaration->buffer = buffer;
-        s->declaration->line   = yed_get_line_text(buffer, row);
-        s->declaration->row    = row;
-        s->declaration->col    = col;
+        s                       = *(symbol **)array_item(symbols, sub);
+        s->declaration          = (item *)malloc(sizeof(item));
+        s->declaration->buffer  = buffer;
+        s->declaration->line    = yed_get_line_text(buffer, row);
+        s->declaration->row     = row;
+        s->declaration->col     = col;
+        s->declaration->start   = col;
+        s->declaration->end     = yed_line_idx_to_col(line, byte);
+        s->declaration->num_len = to_string(row).length() + 1;
+
+//         DBG("start:%d end:%d len:%d", s->declaration->start, s->declaration->end, s->declaration->num_len);
 
 //         DBG("set declaration");
 

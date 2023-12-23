@@ -76,21 +76,31 @@ void find_references_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        col = yed_line_idx_to_col(line, byte);
+        col  = yed_line_idx_to_col(line, byte);
+        byte = range["end"]["character"];
 
-        s                          = *(symbol **)array_item(symbols, sub);
-        i                          = (item *)malloc(sizeof(item));
-        i->buffer                  = buffer;
-        i->line                    = yed_get_line_text(buffer, row);
-        i->row                     = row;
-        i->col                     = col;
-        s->references[s->ref_size] = i;
-        s->ref_size++;
+        s                                   = *(symbol **)array_item(symbols, sub);
+        i                                   = (item *)malloc(sizeof(item));
+        i->buffer                           = buffer;
+        i->line                             = yed_get_line_text(buffer, row);
+        i->row                              = row;
+        i->col                              = col;
+        s->references[s->ref_size]          = i;
+        s->references[s->ref_size]->start   = col;
+        s->references[s->ref_size]->end     = yed_line_idx_to_col(line, byte);
+        s->references[s->ref_size]->num_len = to_string(row).length() + 1;
 
         char  tmp_str[512];
         char *tmp_str1;
-        tmp_str1 = strdup(s->references[s->ref_size - 1]->line);
-        sprintf(tmp_str, "%d %s", row, trim_leading_whitespace(tmp_str1));
+        char *tmp_str2;
+        tmp_str1 = strdup(s->references[s->ref_size]->line);
+        tmp_str2 = trim_leading_whitespace(tmp_str1);
+        sprintf(tmp_str, "%d %s", row, tmp_str2);
+
+        int num = tmp_str2 - tmp_str1;
+        s->references[s->ref_size]->start = s->references[s->ref_size]->start - num;
+        s->references[s->ref_size]->end   = s->references[s->ref_size]->end - num;
+        s->ref_size++;
 
         buffer1 = _get_or_make_buff();
         if (buffer1 != NULL) {

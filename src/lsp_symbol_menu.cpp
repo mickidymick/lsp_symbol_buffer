@@ -30,13 +30,8 @@ static void _lsp_symbol_menu_update_handler(yed_event *event);
 static void _lsp_symbol_menu_unload(yed_plugin *self);
 
 /* internal helper functions */
-static void _add_hidden_items(void);
-static void _add_archive_extensions(void);
-static void _add_image_extensions(void);
 static void _clear_symbols(void);
 static int  _cmpfunc(const void *a, const void *b);
-// static file       *_init_file(int parent_idx, char *path, char *name,
-//                               int if_dir, int num_tabs, int color_loc);
 
 extern "C"
 int yed_plugin_boot(yed_plugin *self) {
@@ -79,6 +74,25 @@ int yed_plugin_boot(yed_plugin *self) {
 
 
 
+    if (yed_get_var("lsp-symbol-menu-function-color") == NULL) {
+        yed_set_var("lsp-symbol-menu-function-color", "&magenta");
+    }
+
+    if (yed_get_var("lsp-symbol-menu-symbol-color") == NULL) {
+        yed_set_var("lsp-symbol-menu-symbol-color", "&red swap");
+    }
+
+    if (yed_get_var("lsp-symbol-menu-declaration-color") == NULL) {
+        yed_set_var("lsp-symbol-menu-declaration-color", "&gray swap");
+    }
+
+    if (yed_get_var("lsp-symbol-menu-definition-color") == NULL) {
+        yed_set_var("lsp-symbol-menu-definition-color", "&gray swap");
+    }
+
+    if (yed_get_var("lsp-symbol-menu-reference-color") == NULL) {
+        yed_set_var("lsp-symbol-menu-reference-color", "&gray swap");
+    }
 
 
 //     if (yed_get_var("tree-view-update-period") == NULL) {
@@ -341,21 +355,16 @@ static void _lsp_symbol_menu_select(void) {
 }
 
 static void _lsp_symbol_menu_line_handler(yed_event *event) {
-    /*
-    symbol     *s;
-    yed_attrs  *attr_tmp;
-    char       *color_var;
-    yed_attrs   attr_dir;
-    yed_attrs   attr_exec;
-    yed_attrs   attr_symb_link;
-    yed_attrs   attr_device;
-    yed_attrs   attr_graphic_img;
-    yed_attrs   attr_archive;
-    yed_attrs   attr_broken_link;
-    yed_attrs   attr_file;
-    int         loc;
-    int         base;
-    yed_line   *line;
+    symbol    *s;
+    yed_attrs *attr_tmp;
+    char      *color_var;
+    yed_attrs  attr;
+    int        loc;
+    int        start;
+    int        end;
+    int        shift;
+    int        row;
+    yed_line  *line;
 
     if (event->frame         == NULL
     ||  event->frame->buffer == NULL
@@ -363,11 +372,117 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
         return;
     }
 
-    if (array_len(files) < event->row) { return; }
+    if (sub == 0) {
+        if (array_len(symbols) < event->row) {
+            return;
+        }
 
-    f = *(file **) array_item(files, event->row);
+        if ((color_var = yed_get_var("lsp-symbol-menu-function-color"))) {
+            attr     = yed_parse_attrs(color_var);
+            attr_tmp = &attr;
+        }
 
-    if (f->path == NULL) { return; }
+        line = yed_buff_get_line(event->frame->buffer, event->row);
+        if (line == NULL) { return; }
+
+        for (loc = 1; loc <= 6; loc += 1) {
+            yed_eline_combine_col_attrs(event, loc, attr_tmp);
+        }
+
+    } else {
+        s     = *(symbol **)array_item(symbols, sub);
+        row   = event->row;
+        start = 0;
+        end   = 0;
+
+        if (row == 3) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-function-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+            }
+
+//         } else if (row == 4 ) {
+//             if ((color_var = yed_get_var("lsp-symbol-menu-symbol-color"))) {
+//                 attr     = yed_parse_attrs(color_var);
+//                 attr_tmp = &attr;
+//             }
+
+        } else if (row == 6 && s->declaration != NULL) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-declaration-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+            }
+
+        } else if (row == 7 && s->declaration != NULL) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-symbol-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+                start    = s->declaration->start;
+                end      = s->declaration->end;
+                shift    = s->declaration->num_len;
+            }
+
+        } else if (row == 9 && s->definition != NULL) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-definition-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+            }
+
+        } else if (row == 10 && s->definition != NULL) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-symbol-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+                start    = s->definition->start;
+                end      = s->definition->end;
+                shift    = s->definition->num_len;
+            }
+
+        } else if (row == 12 && s->ref_size > 0) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-reference-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+            }
+
+        } else if (row >= 13 && row <= (13 + s->ref_size - 1) && s->ref_size >= 1) {
+            if ((color_var = yed_get_var("lsp-symbol-menu-symbol-color"))) {
+                attr     = yed_parse_attrs(color_var);
+                attr_tmp = &attr;
+                start    = s->references[row - 13]->start;
+                end      = s->references[row - 13]->end;
+                shift    = s->references[row - 13]->num_len;
+            }
+
+        } else {
+            return;
+        }
+
+        line = yed_buff_get_line(event->frame->buffer, row);
+        if (line == NULL) { return; }
+
+        if (start == 0) {
+            for (loc = 1; loc <= line->visual_width; loc += 1) {
+                yed_eline_combine_col_attrs(event, loc, attr_tmp);
+            }
+        } else {
+            start = start + shift;
+            end   = end + shift - 1;
+            for (loc = start; loc <= end; loc += 1) {
+                yed_eline_combine_col_attrs(event, loc, attr_tmp);
+            }
+        }
+    }
+
+
+
+
+
+
+/*
+    if (array_len(symbols) < event->row) { return; }
+
+    s = *(symbol **) array_item(symbols, event->row);
+
+    if (s->buffer == NULL) { return; }
 
     attr_dir         = ZERO_ATTR;
     attr_exec        = ZERO_ATTR;
@@ -560,54 +675,6 @@ static void _clear_symbols(void) {
     }
 
     array_clear(symbols);
-}
-
-static int _cmpfunc(const void *a, const void *b) {
-//     file *left_f;
-//     file *right_f;
-//     char  left_name[512];
-//     char  right_name[512];
-//     int   left;
-//     int   right;
-//     int   loc;
-
-//     left_f  = *(file **)a;
-//     right_f = *(file **)b;
-
-//     left = 0;
-//     if (left_f->flags == IS_DIR) {
-//         left = 1;
-//     }
-
-//     right = 0;
-//     if (right_f->flags == IS_DIR) {
-//         right = 1;
-//     }
-
-//     if (left < right) {
-//         return  1;
-//     } else if (left > right) {
-        return -1;
-//     } else {
-//         strcpy(left_name, left_f->name);
-//         strcpy(right_name, right_f->name);
-
-//         loc = 0;
-//         while (left_name[loc]) {
-//             left_name[loc] = tolower(left_name[loc]);
-//             loc++;
-//         }
-
-//         loc = 0;
-//         while (right_name[loc]) {
-//             right_name[loc] = tolower(right_name[loc]);
-//             loc++;
-//         }
-
-//     	return strcmp(left_name, right_name);
-//     }
-
-//     return ((file *)a)->flags - ((file *)b)->flags;
 }
 
 static void _lsp_symbol_menu_unload(yed_plugin *self) {

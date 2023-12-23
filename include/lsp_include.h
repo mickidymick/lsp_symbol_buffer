@@ -72,6 +72,9 @@ typedef struct {
     char       *line;
     int         row;
     int         col;
+    int         start;
+    int         end;
+    int         num_len;
 } item;
 
 typedef struct {

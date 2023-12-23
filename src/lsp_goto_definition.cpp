@@ -76,14 +76,18 @@ void goto_definition_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        col = yed_line_idx_to_col(line, byte);
+        col  = yed_line_idx_to_col(line, byte);
+        byte = range["end"]["character"];
 
-        s                     = *(symbol **)array_item(symbols, sub);
-        s->definition         = (item *)malloc(sizeof(item));
-        s->definition->buffer = buffer;
-        s->definition->line   = yed_get_line_text(buffer, row);
-        s->definition->row    = row;
-        s->definition->col    = col;
+        s                      = *(symbol **)array_item(symbols, sub);
+        s->definition          = (item *)malloc(sizeof(item));
+        s->definition->buffer  = buffer;
+        s->definition->line    = yed_get_line_text(buffer, row);
+        s->definition->row     = row;
+        s->definition->col     = col;
+        s->definition->start   = col;
+        s->definition->end     = yed_line_idx_to_col(line, byte);
+        s->definition->num_len = to_string(row).length() + 1;
 
 //         DBG("set definition");
 
