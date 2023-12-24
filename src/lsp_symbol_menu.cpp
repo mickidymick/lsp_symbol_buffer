@@ -16,6 +16,8 @@ time_t      last_time;
 time_t      wait_time;
 int         sub = 0;
 int         tot = 1;
+array_t     references;
+int         ref_loc;
 int         has_declaration;
 
 /* internal functions*/
@@ -31,7 +33,6 @@ static void _lsp_symbol_menu_unload(yed_plugin *self);
 
 /* internal helper functions */
 static void _clear_symbols(void);
-static int  _cmpfunc(const void *a, const void *b);
 
 extern "C"
 int yed_plugin_boot(yed_plugin *self) {
@@ -51,8 +52,6 @@ int yed_plugin_boot(yed_plugin *self) {
         { find_references_pmsg,     { EVENT_PLUGIN_MESSAGE } },
     };
 
-//     map<const char*, void(*)(int, char**)> cmds = { { "lsp-symbol-menu", lsp_symbol_menu} };
-
     for (auto &pair : event_handlers) {
         for (auto evt : pair.second) {
             yed_event_handler h;
@@ -62,17 +61,23 @@ int yed_plugin_boot(yed_plugin *self) {
         }
     }
 
-//     for (auto &pair : cmds) {
-//         yed_plugin_set_command(self, pair.first, pair.second);
-//     }
+    map<const char*, void(*)(int, char**)> cmds = {
+        { "lsp-symbol-menu",         _lsp_symbol_menu},
+        { "lsp-goto-declaration",    goto_declaration_cmd},
+        { "lsp-goto-definition",     goto_definition_cmd},
+        { "lsp-find-references",     find_references_cmd},
+        { "lsp-goto-next-reference", goto_next_reference_cmd},
+        { "lsp-goto-prev-reference", goto_prev_reference_cmd},
+    };
+
+    for (auto &pair : cmds) {
+        yed_plugin_set_command(self, pair.first, pair.second);
+    }
 
     /* Fake cursor move so that it works on startup/reload. */
-//     yed_move_cursor_within_active_frame(0, 0);
+    yed_move_cursor_within_active_frame(0, 0);
 
-//     yed_plugin_set_unload_fn(self, unload);
-
-
-
+    yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
 
     if (yed_get_var("lsp-symbol-menu-function-color") == NULL) {
         yed_set_var("lsp-symbol-menu-function-color", "&magenta");
@@ -94,64 +99,9 @@ int yed_plugin_boot(yed_plugin *self) {
         yed_set_var("lsp-symbol-menu-reference-color", "&gray swap");
     }
 
-
-//     if (yed_get_var("tree-view-update-period") == NULL) {
-//         yed_set_var("tree-view-update-period", "5");
-//     }
-
-//     if (yed_get_var("tree-view-hidden-items") == NULL) {
-//         yed_set_var("tree-view-hidden-items", "");
-//     }
-
-//     if (yed_get_var("tree-view-image-extensions") == NULL) {
-//         yed_set_var("tree-view-image-extensions", "");
-//     }
-
-//     if (yed_get_var("tree-view-archive-extensions") == NULL) {
-//         yed_set_var("tree-view-archive-extensions", "");
-//     }
-
-//     if (yed_get_var("tree-view-child-char-l") == NULL) {
-//         yed_set_var("tree-view-child-char-l", "└");
-//     }
-
-//     if (yed_get_var("tree-view-child-char-i") == NULL) {
-//         yed_set_var("tree-view-child-char-i", "│");
-//     }
-
-//     if (yed_get_var("tree-view-child-char-t") == NULL) {
-//         yed_set_var("tree-view-child-char-t", "├");
-//     }
-
-//     if (yed_get_var("tree-view-directory-color") == NULL) {
-//         yed_set_var("tree-view-directory-color", "&blue");
-//     }
-
-//     if (yed_get_var("tree-view-exec-color") == NULL) {
-//         yed_set_var("tree-view-exec-color", "&green");
-//     }
-
-//     if (yed_get_var("tree-view-symbolic-link-color") == NULL) {
-//         yed_set_var("tree-view-symbolic-link-color", "&cyan");
-//     }
-
-//     if (yed_get_var("tree-view-device-color") == NULL) {
-//         yed_set_var("tree-view-device-color", "&black swap &yellow.fg");
-//     }
-
-//     if (yed_get_var("tree-view-graphic-image-color") == NULL) {
-//         yed_set_var("tree-view-graphic-image-color", "&magenta");
-//     }
-
-//     if (yed_get_var("tree-view-archive-color") == NULL) {
-//         yed_set_var("tree-view-archive-color", "&red");
-//     }
-
-//     if (yed_get_var("tree-view-broken-link-color") == NULL) {
-//         yed_set_var("tree-view-broken-link-color", "&black swap &red.fg");
-//     }
-
-    yed_plugin_set_command(self, "lsp-symbol-menu", _lsp_symbol_menu);
+    if (yed_get_var("tree-view-update-period") == NULL) {
+        yed_set_var("tree-view-update-period", "5");
+    }
 
     yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
 
@@ -171,7 +121,6 @@ int yed_plugin_boot(yed_plugin *self) {
     lsp_symbol_menu_update.kind = EVENT_PRE_PUMP;
     lsp_symbol_menu_update.fn   = _lsp_symbol_menu_update_handler;
     yed_plugin_add_event_handler(self, lsp_symbol_menu_update);
-
 
     return 0;
 }
@@ -471,99 +420,6 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
             }
         }
     }
-
-
-
-
-
-
-/*
-    if (array_len(symbols) < event->row) { return; }
-
-    s = *(symbol **) array_item(symbols, event->row);
-
-    if (s->buffer == NULL) { return; }
-
-    attr_dir         = ZERO_ATTR;
-    attr_exec        = ZERO_ATTR;
-    attr_symb_link   = ZERO_ATTR;
-    attr_device      = ZERO_ATTR;
-    attr_graphic_img = ZERO_ATTR;
-    attr_archive     = ZERO_ATTR;
-    attr_broken_link = ZERO_ATTR;
-    attr_file        = ZERO_ATTR;
-
-    if ((color_var = yed_get_var("tree-view-directory-color"))) {
-        attr_dir         = yed_parse_attrs(color_var);
-    }
-
-    if ((color_var = yed_get_var("tree-view-exec-color"))) {
-        attr_exec         = yed_parse_attrs(color_var);
-    }
-
-    if ((color_var = yed_get_var("tree-view-symbolic-link-color"))) {
-        attr_symb_link         = yed_parse_attrs(color_var);
-    }
-
-    if ((color_var = yed_get_var("tree-view-device-color"))) {
-        attr_device         = yed_parse_attrs(color_var);
-    }
-
-    if ((color_var = yed_get_var("tree-view-graphic-image-color"))) {
-        attr_graphic_img         = yed_parse_attrs(color_var);
-    }
-
-    if ((color_var = yed_get_var("tree-view-archive-color"))) {
-        attr_archive         = yed_parse_attrs(color_var);
-    }
-
-    if ((color_var = yed_get_var("tree-view-broken-link-color"))) {
-        attr_broken_link         = yed_parse_attrs(color_var);
-    }
-
-    base = 0;
-    switch (f->flags) {
-        case IS_DIR:
-            attr_tmp = &attr_dir;
-            break;
-        case IS_LINK:
-            attr_tmp = &attr_symb_link;
-            break;
-        case IS_B_LINK:
-            attr_tmp = &attr_broken_link;
-            break;
-        case IS_DEVICE:
-            attr_tmp = &attr_device;
-            break;
-        case IS_ARCHIVE:
-            attr_tmp = &attr_archive;
-            break;
-        case IS_IMAGE:
-            attr_tmp = &attr_graphic_img;
-            break;
-        case IS_EXEC:
-            attr_tmp = &attr_exec;
-            break;
-        case IS_FILE:
-        default:
-            base = 1;
-            attr_tmp = &attr_file;
-            break;
-    }
-
-    if (event->frame->buffer == NULL) { return; }
-
-    line = yed_buff_get_line(event->frame->buffer, event->row);
-    if (line == NULL) { return; }
-
-    for (loc = 1; loc <= line->visual_width; loc += 1) {
-        if (loc > f->color_loc) {
-            if (!base) {
-                yed_eline_combine_col_attrs(event, loc, attr_tmp);
-            }
-        }
-    }
-    */
 }
 
 static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
@@ -584,92 +440,42 @@ static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
     event->cancel = 1;
 }
 
-static void  _lsp_symbol_menu_update_handler(yed_event *event) {
-//     file    **f;
-//     char     *path;
-//     array_t   open_dirs;
-//     time_t    curr_time;
-//     int       idx;
+static void _lsp_symbol_menu_update_handler(yed_event *event) {
+    time_t    curr_time;
 
-//     curr_time = time(NULL);
+    curr_time = time(NULL);
 
-//     if (curr_time > last_time + wait_time) {
-
-//         open_dirs = array_make(char *);
-
-//         idx = 0;
-//         array_traverse(files, f) {
-//             if (idx == 0) { idx++; continue; }
-
-//             if ((*f)->open_children) {
-//                 path = strdup((*f)->path);
-//                 array_push(open_dirs, path);
-//             }
-
-//             idx++;
-//         }
-
-//         _tree_view_init();
-
-//         int found;
-//         while (array_len(open_dirs) > 0) {
-//             found = 0;
-//             path = *(char **)array_item(open_dirs, 0);
-
-//             idx = 0;
-//             array_traverse(files, f) {
-//                 if (idx == 0) { idx++; continue; }
-
-//                 if (strcmp((*f)->path, path) == 0) {
-//                     _tree_view_add_dir(idx);
-//                     array_delete(open_dirs, 0);
-//                     found = 1;
-//                     break;
-//                 }
-
-//                 idx++;
-//             }
-
-//             if (!found) {
-//                 array_delete(open_dirs, 0);
-//             }
-//         }
-
-//         last_time = curr_time;
-//     }
+    if (curr_time > last_time + wait_time) {
+        if (ys->active_frame == NULL) {
+            return;
+        }
+//         _lsp_symbol_menu_init();
+        last_time = curr_time;
+    }
 }
-
-// static file *_init_file(int parent_idx, char *path, char *name, int if_dir, int num_tabs, int color_loc) {
-//     file *f;
-
-//     f = malloc(sizeof(file));
-//     memset(f, 0, sizeof(file));
-
-//     if (parent_idx == IS_ROOT) {
-//         f->parent = NULL;
-//     } else {
-//         f->parent = *(struct file **) array_item(files, parent_idx);
-//     }
-
-//     memset(f->path, 0, sizeof(char[512]));
-//     strcat(f->path, path);
-
-//     memset(f->name, 0, sizeof(char[512]));
-//     strcat(f->name, name);
-
-//     f->flags         = if_dir;
-//     f->num_tabs      = num_tabs;
-//     f->open_children = 0;
-//     f->color_loc     = color_loc;
-
-//     return f;
-// }
 
 static void _clear_symbols(void) {
     symbol **symbol_it;
 
     if (array_len(symbols) > 0) {
         array_traverse(symbols, symbol_it) {
+            if ((*symbol_it)->declaration != NULL) {
+                free((*symbol_it)->declaration->line);
+                free((*symbol_it)->declaration);
+            }
+
+            if ((*symbol_it)->definition != NULL) {
+                free((*symbol_it)->definition->line);
+                free((*symbol_it)->definition);
+            }
+
+            for (int i = 0; i < (*symbol_it)->ref_size; i++) {
+                if ((*symbol_it)->references[i] != NULL) {
+                    free((*symbol_it)->references[i]->line);
+//                     free((*symbol_it)->references[i]);
+                }
+            }
+
             free(*symbol_it);
         }
     }

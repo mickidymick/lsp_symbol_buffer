@@ -1,5 +1,82 @@
 #include "lsp_find_references.h"
 
+int lsp_find_references_now = 0;
+
+void find_references_cmd(int n_args, char **args) {
+    if (ys->active_frame         == NULL
+    ||  ys->active_frame->buffer == NULL) {
+        return;
+    }
+
+    uri                     = uri_for_buffer(ys->active_frame->buffer);
+    pos                     = position_in_frame(ys->active_frame);
+    lsp_find_references_now = 1;
+    ref_loc                 = 0;
+
+    if (array_len(references) == 0) {
+        references = array_make(item *);
+
+    } else {
+        item **item_it;
+
+        if (array_len(references) > 0) {
+            array_traverse(references, item_it) {
+                free(*item_it);
+            }
+        }
+
+        array_clear(references);
+    }
+
+    find_references_request(ys->active_frame);
+}
+
+void goto_next_reference_cmd(int n_args, char **args) {
+    item   *i;
+    string  tmp_str2 = "buffer";
+    int     len;
+
+    len = array_len(references);
+
+    if (len < 2) {
+        return;
+    }
+
+    ref_loc++;
+
+    i = *(item **)array_item(references, ref_loc%len);
+    YEXE((char *) tmp_str2.c_str(), i->buffer->path);
+
+    if (ys->active_frame) {
+        yed_move_cursor_within_frame(ys->active_frame, i->row - ys->active_frame->cursor_line, i->col - ys->active_frame->cursor_col);
+    }
+}
+
+void goto_prev_reference_cmd(int n_args, char **args) {
+    item   *i;
+    string  tmp_str2 = "buffer";
+    int     len;
+
+    len = array_len(references);
+
+    if (len < 2) {
+        return;
+    }
+
+    if (ref_loc == 0) {
+        ref_loc = len - 1;
+    } else {
+        ref_loc--;
+    }
+
+    i = *(item **)array_item(references, ref_loc);
+    YEXE((char *) tmp_str2.c_str(), i->buffer->path);
+
+    if (ys->active_frame) {
+        yed_move_cursor_within_frame(ys->active_frame, i->row - ys->active_frame->cursor_line, i->col - ys->active_frame->cursor_col);
+    }
+}
+
 void find_references_request(yed_frame *frame) {
     if (frame == NULL
     ||  frame->buffer == NULL
@@ -65,6 +142,9 @@ void find_references_get_range(const json &result, yed_event *event) {
         } else {
             name = r_path;
         }
+
+        string tmp = "buffer-hidden";
+        YEXE((char *) tmp.c_str(), name);
         buffer = yed_get_buffer(name);
 
         if (buffer == NULL) {
@@ -79,12 +159,26 @@ void find_references_get_range(const json &result, yed_event *event) {
         col  = yed_line_idx_to_col(line, byte);
         byte = range["end"]["character"];
 
+        i         = (item *)malloc(sizeof(item));
+        i->buffer = buffer;
+        i->line   = yed_get_line_text(buffer, row);
+        i->row    = row;
+        i->col    = col;
+
+        if (lsp_find_references_now == 1) {
+            string tmp_str2 = "buffer";
+            YEXE((char *) tmp_str2.c_str(), buffer->path);
+
+            if (ys->active_frame) {
+                yed_move_cursor_within_frame(ys->active_frame, row - ys->active_frame->cursor_line, col - ys->active_frame->cursor_col);
+            }
+
+            array_push(references, i);
+
+            return;
+        }
+
         s                                   = *(symbol **)array_item(symbols, sub);
-        i                                   = (item *)malloc(sizeof(item));
-        i->buffer                           = buffer;
-        i->line                             = yed_get_line_text(buffer, row);
-        i->row                              = row;
-        i->col                              = col;
         s->references[s->ref_size]          = i;
         s->references[s->ref_size]->start   = col;
         s->references[s->ref_size]->end     = yed_line_idx_to_col(line, byte);
@@ -142,6 +236,8 @@ void find_references_pmsg(yed_event *event) {
             find_references_get_range(result, event);
         }
 
-        event->cancel = 1;
     } catch (...) {}
+
+    lsp_find_references_now = 0;
+    event->cancel           = 1;
 }

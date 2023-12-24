@@ -108,6 +108,8 @@ extern time_t      last_time;
 extern time_t      wait_time;
 extern int         sub;
 extern int         tot;
+extern array_t     references;
+extern int         ref_loc;
 extern int         has_declaration;
 
 /* global functions */

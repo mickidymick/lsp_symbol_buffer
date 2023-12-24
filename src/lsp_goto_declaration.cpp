@@ -1,12 +1,26 @@
 #include "lsp_goto_declaration.h"
 #include "lsp_goto_definition.h"
 
+int lsp_goto_declaration_now = 0;
+
+void goto_declaration_cmd(int n_args, char **args) {
+    if (ys->active_frame         == NULL
+    ||  ys->active_frame->buffer == NULL) {
+        return;
+    }
+
+    uri                      = uri_for_buffer(ys->active_frame->buffer);
+    pos                      = position_in_frame(ys->active_frame);
+    lsp_goto_declaration_now = 1;
+
+    goto_declaration_request(ys->active_frame);
+}
+
 void goto_declaration_request(yed_frame *frame) {
     if (frame == NULL
     ||  frame->buffer == NULL
     ||  frame->buffer->kind != BUFF_KIND_FILE
     ||  frame->buffer->flags & BUFF_SPECIAL) {
-
         return;
     }
 
@@ -65,6 +79,9 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
         } else {
             name = r_path;
         }
+
+        string tmp = "buffer-hidden";
+        YEXE((char *) tmp.c_str(), name);
         buffer = yed_get_buffer(name);
 
         if (buffer == NULL) {
@@ -76,8 +93,18 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        col = yed_line_idx_to_col(line, byte);
+        col  = yed_line_idx_to_col(line, byte);
         byte = range["end"]["character"];
+
+        if (lsp_goto_declaration_now == 1) {
+            string tmp_str2 = "buffer";
+            YEXE((char *) tmp_str2.c_str(), buffer->path);
+
+            if (ys->active_frame) {
+                yed_move_cursor_within_frame(ys->active_frame, row - ys->active_frame->cursor_line, col - ys->active_frame->cursor_col);
+            }
+            return;
+        }
 
         s                       = *(symbol **)array_item(symbols, sub);
         s->declaration          = (item *)malloc(sizeof(item));
@@ -137,10 +164,13 @@ void goto_declaration_pmsg(yed_event *event) {
 
     } catch (...) {}
 
-    symbol *s = *(symbol **)array_item(symbols, sub);
-    if (s->definition == NULL) {
-        goto_definition_request(last_frame);
+    if (lsp_goto_declaration_now == 0 && array_len(symbols) > 0) {
+        symbol *s = *(symbol **)array_item(symbols, sub);
+        if (s->definition == NULL) {
+            goto_definition_request(last_frame);
+        }
     }
 
-    event->cancel = 1;
+    lsp_goto_declaration_now = 0;
+    event->cancel            = 1;
 }
