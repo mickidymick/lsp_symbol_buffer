@@ -24,7 +24,6 @@ void symbol_request(yed_frame *frame) {
         }},
     };
 
-
     yed_event event;
     string    text = params.dump();
 
@@ -146,6 +145,15 @@ void symbol_pmsg(yed_event *event) {
         const auto &r = j["result"];
 
         mp.clear();
+        _clear_symbols();
+
+        yed_buffer *buff;
+        buff = _get_or_make_buff();
+        buff->flags &= ~BUFF_RD_ONLY;
+        yed_buff_clear_no_undo(buff);
+        buff->flags |= BUFF_RD_ONLY;
+
+        tot = 0;
 
         if (r.is_array()) {
             for(int i = 0; i < r.size(); i++) {

@@ -117,6 +117,7 @@ static yed_buffer *_get_or_make_buff(void);
 static string      uri_for_buffer(yed_buffer *buffer);
 static position    position_in_frame(yed_frame *frame);
 static char       *trim_leading_whitespace(char *str);
+static void        _clear_symbols(void);
 
 static yed_buffer *_get_or_make_buff(void) {
     yed_buffer *buff;
@@ -173,6 +174,35 @@ static position position_in_frame(yed_frame *frame) {
 static char *trim_leading_whitespace(char *str) {
     while(isspace((unsigned char)*str)) str++;
     return str;
+}
+
+static void _clear_symbols(void) {
+    symbol **symbol_it;
+
+    if (array_len(symbols) > 0) {
+        array_traverse(symbols, symbol_it) {
+            if ((*symbol_it)->declaration != NULL) {
+                free((*symbol_it)->declaration->line);
+                free((*symbol_it)->declaration);
+            }
+
+            if ((*symbol_it)->definition != NULL) {
+                free((*symbol_it)->definition->line);
+                free((*symbol_it)->definition);
+            }
+
+            for (int i = 0; i < (*symbol_it)->ref_size; i++) {
+                if ((*symbol_it)->references[i] != NULL) {
+                    free((*symbol_it)->references[i]->line);
+//                     free((*symbol_it)->references[i]);
+                }
+            }
+
+            free(*symbol_it);
+        }
+    }
+
+    array_clear(symbols);
 }
 
 #endif

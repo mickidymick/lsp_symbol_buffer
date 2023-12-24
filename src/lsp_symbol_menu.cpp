@@ -14,7 +14,7 @@ string      uri;
 string      symbol_buffer_name = "*symbol-menu";
 time_t      last_time;
 time_t      wait_time;
-int         sub = 0;
+int         sub = -1;
 int         tot = 1;
 array_t     references;
 int         ref_loc;
@@ -31,25 +31,21 @@ static void _lsp_symbol_menu_key_pressed_handler(yed_event *event);
 static void _lsp_symbol_menu_update_handler(yed_event *event);
 static void _lsp_symbol_menu_unload(yed_plugin *self);
 
-/* internal helper functions */
-static void _clear_symbols(void);
-
 extern "C"
 int yed_plugin_boot(yed_plugin *self) {
-    yed_event_handler lsp_symbol_menu_key;
-    yed_event_handler lsp_symbol_menu_line;
-    yed_event_handler lsp_symbol_menu_update;
-
     YED_PLUG_VERSION_CHECK();
 
     Self = self;
 
     map<void(*)(yed_event*), vector<yed_event_kind_t> > event_handlers = {
-        { symbol_pmsg,              { EVENT_PLUGIN_MESSAGE } },
-        { goto_declaration_pmsg,    { EVENT_PLUGIN_MESSAGE } },
-        { goto_definition_pmsg,     { EVENT_PLUGIN_MESSAGE } },
-        { goto_implementation_pmsg, { EVENT_PLUGIN_MESSAGE } },
-        { find_references_pmsg,     { EVENT_PLUGIN_MESSAGE } },
+        { symbol_pmsg,                          { EVENT_PLUGIN_MESSAGE } },
+        { goto_declaration_pmsg,                { EVENT_PLUGIN_MESSAGE } },
+        { goto_definition_pmsg,                 { EVENT_PLUGIN_MESSAGE } },
+        { goto_implementation_pmsg,             { EVENT_PLUGIN_MESSAGE } },
+        { find_references_pmsg,                 { EVENT_PLUGIN_MESSAGE } },
+        { _lsp_symbol_menu_key_pressed_handler, { EVENT_KEY_PRESSED }    },
+        { _lsp_symbol_menu_line_handler,        { EVENT_LINE_PRE_DRAW }  },
+        { _lsp_symbol_menu_update_handler,      { EVENT_PRE_PUMP }       },
     };
 
     for (auto &pair : event_handlers) {
@@ -99,28 +95,16 @@ int yed_plugin_boot(yed_plugin *self) {
         yed_set_var("lsp-symbol-menu-reference-color", "&gray swap");
     }
 
-    if (yed_get_var("tree-view-update-period") == NULL) {
-        yed_set_var("tree-view-update-period", "5");
+    if (yed_get_var("lsp-symbol-menu-update-period") == NULL) {
+        yed_set_var("lsp-symbol-menu-update-period", "5");
     }
 
     yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
 
     _lsp_symbol_menu_init();
 
-    wait_time = atoi(yed_get_var("tree-view-update-period"));
+    wait_time = atoi(yed_get_var("lsp-symbol-menu-update-period"));
     last_time = time(NULL);
-
-    lsp_symbol_menu_key.kind = EVENT_KEY_PRESSED;
-    lsp_symbol_menu_key.fn   = _lsp_symbol_menu_key_pressed_handler;
-    yed_plugin_add_event_handler(self, lsp_symbol_menu_key);
-
-    lsp_symbol_menu_line.kind = EVENT_LINE_PRE_DRAW;
-    lsp_symbol_menu_line.fn   = _lsp_symbol_menu_line_handler;
-    yed_plugin_add_event_handler(self, lsp_symbol_menu_line);
-
-    lsp_symbol_menu_update.kind = EVENT_PRE_PUMP;
-    lsp_symbol_menu_update.fn   = _lsp_symbol_menu_update_handler;
-    yed_plugin_add_event_handler(self, lsp_symbol_menu_update);
 
     return 0;
 }
@@ -147,19 +131,11 @@ static void _lsp_symbol_menu(int n_args, char **args) {
 }
 
 static void _lsp_symbol_menu_init(void) {
-    yed_buffer *buff;
+//     yed_buffer *buff;
 
     if (array_len(symbols) == 0) {
         symbols = array_make(symbol *);
-
-    } else {
-        _clear_symbols();
     }
-
-    buff = _get_or_make_buff();
-    buff->flags &= ~BUFF_RD_ONLY;
-    yed_buff_clear_no_undo(buff);
-    buff->flags |= BUFF_RD_ONLY;
 
     if (ys->active_frame != NULL
     &&  ys->active_frame->buffer != NULL) {
@@ -246,7 +222,7 @@ static void _lsp_symbol_menu_select(void) {
     string  tmp_str3 = "jump-stack-push";
     int     loc;
 
-    if (sub == 0) {
+    if (sub == -1) {
         sub = ys->active_frame->cursor_line - 1;
         s   = *(symbol **)array_item(symbols, sub);
         if (s == NULL) {
@@ -265,7 +241,7 @@ static void _lsp_symbol_menu_select(void) {
 
         if (loc == 1) {
             // back
-            sub = 0;
+            sub = -1;
             DBG("closed: %s", s->name);
             _lsp_close_symbol();
 
@@ -321,7 +297,7 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
         return;
     }
 
-    if (sub == 0) {
+    if (sub == -1) {
         if (array_len(symbols) < event->row) {
             return;
         }
@@ -449,38 +425,15 @@ static void _lsp_symbol_menu_update_handler(yed_event *event) {
         if (ys->active_frame == NULL) {
             return;
         }
-//         _lsp_symbol_menu_init();
+
+        if (array_len(symbols) > 0 && sub != -1) {
+            return;
+        }
+
+        DBG("update");
+        _lsp_symbol_menu_init();
         last_time = curr_time;
     }
-}
-
-static void _clear_symbols(void) {
-    symbol **symbol_it;
-
-    if (array_len(symbols) > 0) {
-        array_traverse(symbols, symbol_it) {
-            if ((*symbol_it)->declaration != NULL) {
-                free((*symbol_it)->declaration->line);
-                free((*symbol_it)->declaration);
-            }
-
-            if ((*symbol_it)->definition != NULL) {
-                free((*symbol_it)->definition->line);
-                free((*symbol_it)->definition);
-            }
-
-            for (int i = 0; i < (*symbol_it)->ref_size; i++) {
-                if ((*symbol_it)->references[i] != NULL) {
-                    free((*symbol_it)->references[i]->line);
-//                     free((*symbol_it)->references[i]);
-                }
-            }
-
-            free(*symbol_it);
-        }
-    }
-
-    array_clear(symbols);
 }
 
 static void _lsp_symbol_menu_unload(yed_plugin *self) {
