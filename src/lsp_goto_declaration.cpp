@@ -36,6 +36,8 @@ void goto_declaration_request(yed_frame *frame) {
         }},
     };
 
+//     DBG("row:%d col:%d", pos.line, pos.character);
+
     yed_event event;
     string    text = params.dump();
 
@@ -44,6 +46,8 @@ void goto_declaration_request(yed_frame *frame) {
     event.plugin_message.plugin_id   = "lsp_symbol_menu";
     event.plugin_message.string_data = text.c_str();
     event.ft                         = frame->buffer->ft;
+
+//     DBG("Declaration");
 
     yed_trigger_event(&event);
 }
@@ -106,22 +110,31 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        s                       = *(symbol **)array_item(symbols, sub);
-        s->declaration          = (item *)malloc(sizeof(item));
-        s->declaration->buffer  = buffer;
-        s->declaration->line    = yed_get_line_text(buffer, row);
-        s->declaration->row     = row;
-        s->declaration->col     = col;
-        s->declaration->start   = col;
-        s->declaration->end     = yed_line_idx_to_col(line, byte);
-        s->declaration->num_len = to_string(row).length() + 1;
+//         s                       = *(symbol **)array_item(symbols, sub);
+//         s->declaration          = (item *)malloc(sizeof(item));
+//         s->declaration->buffer  = buffer;
+//         s->declaration->line    = yed_get_line_text(buffer, row);
+//         s->declaration->row     = row;
+//         s->declaration->col     = col;
+//         s->declaration->start   = col;
+//         s->declaration->end     = yed_line_idx_to_col(line, byte);
+//         s->declaration->num_len = to_string(row).length() + 1;
+
+        cur_symbol->declaration          = (item *)malloc(sizeof(item));
+        cur_symbol->declaration->buffer  = buffer;
+        cur_symbol->declaration->line    = yed_get_line_text(buffer, row);
+        cur_symbol->declaration->row     = row;
+        cur_symbol->declaration->col     = col;
+        cur_symbol->declaration->start   = col;
+        cur_symbol->declaration->end     = yed_line_idx_to_col(line, byte);
+        cur_symbol->declaration->num_len = to_string(row).length() + 1;
 
 //         DBG("start:%d end:%d len:%d", s->declaration->start, s->declaration->end, s->declaration->num_len);
 
 //         DBG("set declaration");
 
         char tmp_str[512];
-        sprintf(tmp_str, "%d %s", row, s->declaration->line);
+        sprintf(tmp_str, "%d %s", row, cur_symbol->declaration->line);
 
         buffer1 = _get_or_make_buff();
         if (buffer1 != NULL) {
@@ -129,12 +142,23 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
 
             yed_buff_insert_string_no_undo(buffer1, "Declaration", 6, 1);
             yed_buff_insert_string_no_undo(buffer1, tmp_str, 7, 1);
-            tot++;
+
+            if (cur_symbol->definition == NULL) {
+                yed_buff_insert_string_no_undo(buffer1, "Definition", 9, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 10, 1);
+            }
+
+            if (cur_symbol->ref_size == 0) {
+                yed_buff_insert_string_no_undo(buffer1, "References", 12, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 13, 1);
+            }
+//             tot++;
             buffer1->flags |= BUFF_RD_ONLY;
         }
 
-        pos.line      = s->declaration->row - 1;
-        pos.character = s->declaration->col + 1;
+        pos.line      = cur_symbol->declaration->row - 1;
+        pos.character = cur_symbol->declaration->col + 1;
+        uri           = b;
     }
 }
 
@@ -164,9 +188,9 @@ void goto_declaration_pmsg(yed_event *event) {
 
     } catch (...) {}
 
-    if (lsp_goto_declaration_now == 0 && array_len(symbols) > 0) {
-        symbol *s = *(symbol **)array_item(symbols, sub);
-        if (s->definition == NULL) {
+//     if (lsp_goto_declaration_now == 0 && array_len(symbols) > 0) {
+    if (lsp_goto_declaration_now == 0) {
+        if (cur_symbol->definition == NULL) {
             goto_definition_request(last_frame);
         }
     }

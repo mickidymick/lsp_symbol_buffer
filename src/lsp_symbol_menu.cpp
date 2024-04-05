@@ -8,6 +8,7 @@
 /* global variables */
 yed_plugin *Self;
 yed_frame  *last_frame = NULL;
+symbol     *cur_symbol;
 array_t     symbols;
 position    pos;
 string      uri;
@@ -21,15 +22,16 @@ int         ref_loc;
 int         has_declaration;
 
 /* internal functions*/
-static void _lsp_symbol_menu(int n_args, char **args);
-static void _lsp_symbol_menu_init(void);
-static void _lsp_open_symbol(int loc, symbol *s);
-static void _lsp_close_symbol(void);
-static void _lsp_symbol_menu_select(void);
-static void _lsp_symbol_menu_line_handler(yed_event *event);
-static void _lsp_symbol_menu_key_pressed_handler(yed_event *event);
-static void _lsp_symbol_menu_update_handler(yed_event *event);
-static void _lsp_symbol_menu_unload(yed_plugin *self);
+static void _lsp_search_symbol(int n_args, char **args);
+// static void _lsp_symbol_menu(int n_args, char **args);
+// static void _lsp_symbol_menu_init(void);
+// static void _lsp_open_symbol(int loc, symbol *s);
+// static void _lsp_close_symbol(void);
+// static void _lsp_symbol_menu_select(void);
+// static void _lsp_symbol_menu_line_handler(yed_event *event);
+// static void _lsp_symbol_menu_key_pressed_handler(yed_event *event);
+// static void _lsp_symbol_menu_update_handler(yed_event *event);
+// static void _lsp_symbol_menu_unload(yed_plugin *self);
 
 extern "C"
 int yed_plugin_boot(yed_plugin *self) {
@@ -43,9 +45,9 @@ int yed_plugin_boot(yed_plugin *self) {
         { goto_definition_pmsg,                 { EVENT_PLUGIN_MESSAGE } },
         { goto_implementation_pmsg,             { EVENT_PLUGIN_MESSAGE } },
         { find_references_pmsg,                 { EVENT_PLUGIN_MESSAGE } },
-        { _lsp_symbol_menu_key_pressed_handler, { EVENT_KEY_PRESSED }    },
-        { _lsp_symbol_menu_line_handler,        { EVENT_LINE_PRE_DRAW }  },
-        { _lsp_symbol_menu_update_handler,      { EVENT_PRE_PUMP }       },
+//         { _lsp_symbol_menu_key_pressed_handler, { EVENT_KEY_PRESSED }    },
+//         { _lsp_symbol_menu_line_handler,        { EVENT_LINE_PRE_DRAW }  },
+//         { _lsp_symbol_menu_update_handler,      { EVENT_PRE_PUMP }       },
     };
 
     for (auto &pair : event_handlers) {
@@ -58,7 +60,8 @@ int yed_plugin_boot(yed_plugin *self) {
     }
 
     map<const char*, void(*)(int, char**)> cmds = {
-        { "lsp-symbol-menu",         _lsp_symbol_menu},
+        { "lsp-search-symbol",         _lsp_search_symbol},
+//         { "lsp-symbol-menu",         _lsp_symbol_menu},
         { "lsp-goto-declaration",    goto_declaration_cmd},
         { "lsp-goto-definition",     goto_definition_cmd},
         { "lsp-find-references",     find_references_cmd},
@@ -73,7 +76,7 @@ int yed_plugin_boot(yed_plugin *self) {
     /* Fake cursor move so that it works on startup/reload. */
     yed_move_cursor_within_active_frame(0, 0);
 
-    yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
+//     yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
 
     if (yed_get_var("lsp-symbol-menu-function-color") == NULL) {
         yed_set_var("lsp-symbol-menu-function-color", "&magenta");
@@ -95,20 +98,87 @@ int yed_plugin_boot(yed_plugin *self) {
         yed_set_var("lsp-symbol-menu-reference-color", "&gray swap");
     }
 
-    if (yed_get_var("lsp-symbol-menu-update-period") == NULL) {
-        yed_set_var("lsp-symbol-menu-update-period", "5");
-    }
+//     if (yed_get_var("lsp-symbol-menu-update-period") == NULL) {
+//         yed_set_var("lsp-symbol-menu-update-period", "5");
+//     }
 
-    yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
+//     yed_plugin_set_unload_fn(self, _lsp_symbol_menu_unload);
 
-    _lsp_symbol_menu_init();
+//     _lsp_symbol_menu_init();
 
-    wait_time = atoi(yed_get_var("lsp-symbol-menu-update-period"));
-    last_time = time(NULL);
+//     wait_time = atoi(yed_get_var("lsp-symbol-menu-update-period"));
+//     last_time = time(NULL);
 
     return 0;
 }
 
+static void _lsp_search_symbol(int n_args, char **args) {
+    int         line_num;
+    yed_buffer *buffer;
+    yed_frame  *frame;
+
+    frame = ys->active_frame;
+
+    if (array_len(symbols) == 0) {
+        symbols = array_make(symbol *);
+    }
+
+    string tmp_str1 = "special-buffer-prepare-focus";
+    YEXE((char *) tmp_str1.c_str(), SYM_BUFFER);
+
+    if (ys->active_frame) {
+        string tmp_str2 = "buffer";
+        YEXE((char *) tmp_str2.c_str(), SYM_BUFFER);
+    }
+
+    yed_set_cursor_far_within_frame(ys->active_frame, 1, 1);
+
+    line_num       = 1;
+    buffer         = _get_or_make_buff();
+    buffer->flags &= ~BUFF_RD_ONLY;
+
+    yed_buff_clear(buffer);
+    yed_buff_insert_string_no_undo(buffer, "Symbol Menu", line_num, 1);
+    line_num++;
+    line_num++;
+
+//     yed_buff_insert_string_no_undo(buffer, s->name, line_num, 1);
+
+    buffer->flags |= BUFF_RD_ONLY;
+
+    _init_symbol();
+
+    uri = uri_for_buffer(frame->buffer);
+    pos = position_in_frame(frame);
+
+    // get declaration
+    // symbol declaration
+    DBG("goto_declaration");
+    goto_declaration_request(frame);
+
+    // get definition
+    // symbol definition
+    // str = "this";
+//     DBG("goto_definition");
+//     goto_definition_request(last_frame);
+
+    // get type_definition
+
+    // get implementation
+    // trait impl in rust / java / go
+//     DBG("goto_implementation");
+//     goto_implementation_request(last_frame);
+
+    // get references
+    // any other location symbol is used
+    // printf("%s\n", str);
+//     DBG("find_references");
+    cur_symbol->ref_size = 0;
+    find_references_request(last_frame);
+
+}
+
+/*
 static void _lsp_symbol_menu(int n_args, char **args) {
     if (array_len(symbols) == 0) {
         _lsp_symbol_menu_init();
@@ -142,7 +212,9 @@ static void _lsp_symbol_menu_init(void) {
         symbol_request(ys->active_frame);
     }
 }
+*/
 
+/*
 static void _lsp_open_symbol(int loc, symbol *s) {
     yed_buffer *buffer;
     int         line_num;
@@ -214,7 +286,9 @@ static void _lsp_close_symbol(void) {
         symbol_request(ys->active_frame);
     }
 }
+*/
 
+/*
 static void _lsp_symbol_menu_select(void) {
     symbol *s;
     string  tmp_str1 = "special-buffer-prepare-unfocus";
@@ -278,7 +352,9 @@ static void _lsp_symbol_menu_select(void) {
         }
     }
 }
+*/
 
+/*
 static void _lsp_symbol_menu_line_handler(yed_event *event) {
     symbol    *s;
     yed_attrs *attr_tmp;
@@ -397,7 +473,9 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
         }
     }
 }
+*/
 
+/*
 static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
   yed_frame *eframe;
 
@@ -415,7 +493,9 @@ static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
 
     event->cancel = 1;
 }
+*/
 
+/*
 static void _lsp_symbol_menu_update_handler(yed_event *event) {
     time_t    curr_time;
 
@@ -435,7 +515,10 @@ static void _lsp_symbol_menu_update_handler(yed_event *event) {
         last_time = curr_time;
     }
 }
+*/
 
+/*
 static void _lsp_symbol_menu_unload(yed_plugin *self) {
     _clear_symbols();
 }
+*/

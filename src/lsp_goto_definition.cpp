@@ -45,6 +45,8 @@ void goto_definition_request(yed_frame *frame) {
     event.plugin_message.string_data = text.c_str();
     event.ft                         = frame->buffer->ft;
 
+//     DBG("Definition");
+
     yed_trigger_event(&event);
 }
 
@@ -106,20 +108,29 @@ void goto_definition_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        s                      = *(symbol **)array_item(symbols, sub);
-        s->definition          = (item *)malloc(sizeof(item));
-        s->definition->buffer  = buffer;
-        s->definition->line    = yed_get_line_text(buffer, row);
-        s->definition->row     = row;
-        s->definition->col     = col;
-        s->definition->start   = col;
-        s->definition->end     = yed_line_idx_to_col(line, byte);
-        s->definition->num_len = to_string(row).length() + 1;
+//         s                      = *(symbol **)array_item(symbols, sub);
+//         s->definition          = (item *)malloc(sizeof(item));
+//         s->definition->buffer  = buffer;
+//         s->definition->line    = yed_get_line_text(buffer, row);
+//         s->definition->row     = row;
+//         s->definition->col     = col;
+//         s->definition->start   = col;
+//         s->definition->end     = yed_line_idx_to_col(line, byte);
+//         s->definition->num_len = to_string(row).length() + 1;
+
+        cur_symbol->definition          = (item *)malloc(sizeof(item));
+        cur_symbol->definition->buffer  = buffer;
+        cur_symbol->definition->line    = yed_get_line_text(buffer, row);
+        cur_symbol->definition->row     = row;
+        cur_symbol->definition->col     = col;
+        cur_symbol->definition->start   = col;
+        cur_symbol->definition->end     = yed_line_idx_to_col(line, byte);
+        cur_symbol->definition->num_len = to_string(row).length() + 1;
 
 //         DBG("set definition");
 
         char tmp_str[512];
-        sprintf(tmp_str, "%d %s", row, s->definition->line);
+        sprintf(tmp_str, "%d %s", row, cur_symbol->definition->line);
 
         buffer1 = _get_or_make_buff();
         if (buffer1 != NULL) {
@@ -131,8 +142,9 @@ void goto_definition_get_range(const json &result, yed_event *event) {
             buffer1->flags |= BUFF_RD_ONLY;
         }
 
-        pos.line      = s->definition->row - 1;
-        pos.character = s->definition->col + 1;
+        pos.line      = cur_symbol->definition->row - 1;
+        pos.character = cur_symbol->definition->col + 1;
+        uri           = b;
     }
 }
 
@@ -162,9 +174,10 @@ void goto_definition_pmsg(yed_event *event) {
 
     } catch (...) {}
 
-    if (lsp_goto_definition_now == 0 && array_len(symbols) > 0) {
-        symbol *s = *(symbol **)array_item(symbols, sub);
-        if (s->declaration == NULL) {
+//     if (lsp_goto_definition_now == 0 && array_len(symbols) > 0) {
+    if (lsp_goto_definition_now == 0) {
+//         symbol *s = *(symbol **)array_item(symbols, sub);
+        if (cur_symbol->declaration == NULL) {
             goto_declaration_request(last_frame);
         }
     }

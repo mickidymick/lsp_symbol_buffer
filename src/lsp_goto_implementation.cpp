@@ -21,6 +21,8 @@ void goto_implementation_request(yed_frame *frame) {
         }},
     };
 
+//     DBG("row:%d col:%d", pos.line, pos.character);
+
     yed_event event;
     string    text = params.dump();
 
@@ -77,15 +79,21 @@ void goto_implementation_get_range(const json &result, yed_event *event) {
 
         col = yed_line_idx_to_col(line, byte);
 
-        s                         = *(symbol **)array_item(symbols, sub);
-        s->implementation         = (item *)malloc(sizeof(item));
-        s->implementation->buffer = buffer;
-        s->implementation->line   = yed_get_line_text(buffer, row);
-        s->implementation->row    = row;
-        s->implementation->col    = col;
+//         s                         = *(symbol **)array_item(symbols, sub);
+//         s->implementation         = (item *)malloc(sizeof(item));
+//         s->implementation->buffer = buffer;
+//         s->implementation->line   = yed_get_line_text(buffer, row);
+//         s->implementation->row    = row;
+//         s->implementation->col    = col;
+
+        cur_symbol->implementation         = (item *)malloc(sizeof(item));
+        cur_symbol->implementation->buffer = buffer;
+        cur_symbol->implementation->line   = yed_get_line_text(buffer, row);
+        cur_symbol->implementation->row    = row;
+        cur_symbol->implementation->col    = col;
 
         char tmp_str[512];
-        sprintf(tmp_str, "%d %s", row, s->implementation->line);
+        sprintf(tmp_str, "%d %s", row, cur_symbol->implementation->line);
 
         buffer1 = _get_or_make_buff();
         if (buffer1 != NULL) {
@@ -110,9 +118,9 @@ void goto_implementation_pmsg(yed_event *event) {
     }
 
     try {
-        DBG("Implementation");
+//         DBG("Implementation");
         auto j = json::parse(event->plugin_message.string_data);
-        DBG("%s",j.dump(2).c_str());
+//         DBG("%s",j.dump(2).c_str());
         const auto &r = j["result"];
 
         if (r.is_array()) {

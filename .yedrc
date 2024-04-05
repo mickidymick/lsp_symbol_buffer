@@ -5,12 +5,13 @@ set "mouse-menu-on-word"      "Paste paste-yank-buffer                          
                               'Jump to Definition' 'multi jump-stack-push ctags-jump-to-definition'                               \
                                Manpage 'man-word'                                                                                 \
                                Convert convert-number                                                                             \
-                              'Goto Declaration' 'multi jump-stack-push lsp-goto-declaration'                                     \
-                              'Goto Definition' 'multi jump-stack-push lsp-goto-definition'                                       \
-                              'Goto References' 'multi jump-stack-push lsp-find-references'                                       \
-                              'Goto Next Reference' 'lsp-goto-next-reference'                                                     \
-                              'Goto Prev Reference' 'lsp-goto-prev-reference'                                                     \
+                              'Search Symbol' lsp-search-symbol                                                                   \
                               "
+#                               'Goto Declaration' 'multi jump-stack-push lsp-goto-declaration'                                     \
+#                               'Goto Definition' 'multi jump-stack-push lsp-goto-definition'                                       \
+#                               'Goto References' 'multi jump-stack-push lsp-find-references'                                       \
+#                               'Goto Next Reference' 'lsp-goto-next-reference'                                                     \
+#                               'Goto Prev Reference' 'lsp-goto-prev-reference'                                                     \
 #                               'LSP Info' lsp-info"
 
 plugin-unload             "ypm/plugins/lsp_info_popup"

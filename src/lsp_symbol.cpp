@@ -160,7 +160,7 @@ void symbol_pmsg(yed_event *event) {
                 if (j["result"][i]["kind"] == 12
                 ||  j["result"][i]["kind"] == 5
                 ||  j["result"][i]["kind"] == 23) {
-/*                     DBG("%s",j["result"][i].dump(2).c_str()); */
+//                     DBG("%s",j["result"][i].dump(2).c_str());
                     const json &result = j["result"][i];
                     symbol_get_range(result, event);
                 }

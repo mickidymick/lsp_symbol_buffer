@@ -100,6 +100,7 @@ typedef struct {
 /* global variables */
 extern yed_plugin *Self;
 extern yed_frame  *last_frame;
+extern symbol     *cur_symbol;
 extern array_t     symbols;
 extern position    pos;
 extern string      uri;
@@ -118,6 +119,8 @@ static string      uri_for_buffer(yed_buffer *buffer);
 static position    position_in_frame(yed_frame *frame);
 static char       *trim_leading_whitespace(char *str);
 static void        _clear_symbols(void);
+static void        _clear_symbol(void);
+static void        _init_symbol(void);
 
 static yed_buffer *_get_or_make_buff(void) {
     yed_buffer *buff;
@@ -174,6 +177,49 @@ static position position_in_frame(yed_frame *frame) {
 static char *trim_leading_whitespace(char *str) {
     while(isspace((unsigned char)*str)) str++;
     return str;
+}
+
+static void _clear_symbol(void) {
+    if (cur_symbol->declaration != NULL) {
+        free(cur_symbol->declaration->line);
+        free(cur_symbol->declaration);
+    }
+
+    if (cur_symbol->definition != NULL) {
+        free(cur_symbol->definition->line);
+        free(cur_symbol->definition);
+    }
+
+    if (cur_symbol->type_definition != NULL) {
+        free(cur_symbol->type_definition->line);
+        free(cur_symbol->type_definition);
+    }
+
+    if (cur_symbol->implementation != NULL) {
+        free(cur_symbol->implementation->line);
+        free(cur_symbol->implementation);
+    }
+
+    for (int i = 0; i < cur_symbol->ref_size; i++) {
+        if (cur_symbol->references[i] != NULL) {
+            free(cur_symbol->references[i]->line);
+        }
+    }
+
+}
+
+static void _init_symbol(void) {
+
+    if (cur_symbol != NULL) {
+        _clear_symbol();
+    }
+
+    cur_symbol = (symbol *)malloc(sizeof(symbol));
+    cur_symbol->declaration     = NULL;
+    cur_symbol->definition      = NULL;
+    cur_symbol->type_definition = NULL;
+    cur_symbol->implementation  = NULL;
+    cur_symbol->ref_size        = 0;
 }
 
 static void _clear_symbols(void) {
