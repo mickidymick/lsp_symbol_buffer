@@ -47,6 +47,7 @@ typedef struct {
     int         start;
     int         end;
     int         num_len;
+    int         name_len;
 } item;
 
 typedef struct {

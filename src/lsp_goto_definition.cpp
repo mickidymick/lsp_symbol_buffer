@@ -108,29 +108,23 @@ void goto_definition_get_range(const json &result, yed_event *event) {
             return;
         }
 
-//         s                      = *(symbol **)array_item(symbols, sub);
-//         s->definition          = (item *)malloc(sizeof(item));
-//         s->definition->buffer  = buffer;
-//         s->definition->line    = yed_get_line_text(buffer, row);
-//         s->definition->row     = row;
-//         s->definition->col     = col;
-//         s->definition->start   = col;
-//         s->definition->end     = yed_line_idx_to_col(line, byte);
-//         s->definition->num_len = to_string(row).length() + 1;
+        cur_symbol->definition           = (item *)malloc(sizeof(item));
+        cur_symbol->definition->buffer   = buffer;
+        cur_symbol->definition->line     = yed_get_line_text(buffer, row);
+        cur_symbol->definition->row      = row;
+        cur_symbol->definition->col      = col;
+        cur_symbol->definition->start    = col;
+        cur_symbol->definition->end      = yed_line_idx_to_col(line, byte);
+        cur_symbol->definition->num_len  = to_string(row).length() + 1;
 
-        cur_symbol->definition          = (item *)malloc(sizeof(item));
-        cur_symbol->definition->buffer  = buffer;
-        cur_symbol->definition->line    = yed_get_line_text(buffer, row);
-        cur_symbol->definition->row     = row;
-        cur_symbol->definition->col     = col;
-        cur_symbol->definition->start   = col;
-        cur_symbol->definition->end     = yed_line_idx_to_col(line, byte);
-        cur_symbol->definition->num_len = to_string(row).length() + 1;
+        string str(cur_symbol->definition->buffer->name);
+
+        cur_symbol->definition->name_len = str.size();
 
 //         DBG("set definition");
 
         char tmp_str[512];
-        sprintf(tmp_str, "%d %s", row, cur_symbol->definition->line);
+        sprintf(tmp_str, "%s:%d:%s", buffer->name, row, cur_symbol->definition->line);
 
         buffer1 = _get_or_make_buff();
         if (buffer1 != NULL) {

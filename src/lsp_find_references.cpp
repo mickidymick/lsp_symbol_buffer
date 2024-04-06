@@ -162,17 +162,20 @@ void find_references_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        cur_symbol->references[cur_symbol->ref_size]          = i;
-        cur_symbol->references[cur_symbol->ref_size]->start   = col;
-        cur_symbol->references[cur_symbol->ref_size]->end     = yed_line_idx_to_col(line, byte);
-        cur_symbol->references[cur_symbol->ref_size]->num_len = to_string(row).length() + 1;
+        string str(buffer->name);
+
+        cur_symbol->references[cur_symbol->ref_size]           = i;
+        cur_symbol->references[cur_symbol->ref_size]->start    = col;
+        cur_symbol->references[cur_symbol->ref_size]->end      = yed_line_idx_to_col(line, byte);
+        cur_symbol->references[cur_symbol->ref_size]->num_len  = to_string(row).length() + 1;
+        cur_symbol->references[cur_symbol->ref_size]->name_len = str.size();
 
         char  tmp_str[512];
         char *tmp_str1;
         char *tmp_str2;
         tmp_str1 = strdup(cur_symbol->references[cur_symbol->ref_size]->line);
         tmp_str2 = trim_leading_whitespace(tmp_str1);
-        sprintf(tmp_str, "%d %s", row, tmp_str2);
+        sprintf(tmp_str, "%s:%d:%s", buffer->name, row, tmp_str2);
 
         int num = tmp_str2 - tmp_str1;
         cur_symbol->references[cur_symbol->ref_size]->start = cur_symbol->references[cur_symbol->ref_size]->start - num;

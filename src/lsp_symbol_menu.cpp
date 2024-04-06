@@ -249,7 +249,8 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
             attr_tmp = &attr;
             start    = cur_symbol->declaration->start;
             end      = cur_symbol->declaration->end;
-            shift    = cur_symbol->declaration->num_len;
+//             shift    = cur_symbol->declaration->num_len;
+            shift    = cur_symbol->declaration->num_len + 1 + cur_symbol->declaration->name_len;
         }
 
     } else if (row == 9 && cur_symbol->definition != NULL) {
@@ -264,7 +265,8 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
             attr_tmp = &attr;
             start    = cur_symbol->definition->start;
             end      = cur_symbol->definition->end;
-            shift    = cur_symbol->definition->num_len;
+//             shift    = cur_symbol->definition->num_len;
+            shift    = cur_symbol->definition->num_len + 1 + cur_symbol->definition->name_len;
         }
 
     } else if (row == 12 && cur_symbol->ref_size > 0) {
@@ -279,7 +281,8 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
             attr_tmp = &attr;
             start    = cur_symbol->references[row - 13]->start;
             end      = cur_symbol->references[row - 13]->end;
-            shift    = cur_symbol->references[row - 13]->num_len;
+//             shift    = cur_symbol->references[row - 13]->num_len;
+            shift    = cur_symbol->references[row - 13]->num_len + 1 + cur_symbol->references[row - 13]->name_len;
         }
 
     } else {

@@ -108,17 +108,21 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
             return;
         }
 
-        cur_symbol->declaration          = (item *)malloc(sizeof(item));
-        cur_symbol->declaration->buffer  = buffer;
-        cur_symbol->declaration->line    = yed_get_line_text(buffer, row);
-        cur_symbol->declaration->row     = row;
-        cur_symbol->declaration->col     = col;
-        cur_symbol->declaration->start   = col;
-        cur_symbol->declaration->end     = yed_line_idx_to_col(line, byte);
-        cur_symbol->declaration->num_len = to_string(row).length() + 1;
+        cur_symbol->declaration           = (item *)malloc(sizeof(item));
+        cur_symbol->declaration->buffer   = buffer;
+        cur_symbol->declaration->line     = yed_get_line_text(buffer, row);
+        cur_symbol->declaration->row      = row;
+        cur_symbol->declaration->col      = col;
+        cur_symbol->declaration->start    = col;
+        cur_symbol->declaration->end      = yed_line_idx_to_col(line, byte);
+        cur_symbol->declaration->num_len  = to_string(row).length() + 1;
+
+        string str(cur_symbol->declaration->buffer->name);
+
+        cur_symbol->declaration->name_len = str.size();
 
         char tmp_str[512];
-        sprintf(tmp_str, "%d %s", row, cur_symbol->declaration->line);
+        sprintf(tmp_str, "%s:%d:%s", buffer->name, row, cur_symbol->declaration->line);
 
         buffer1 = _get_or_make_buff();
         if (buffer1 != NULL) {
