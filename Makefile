@@ -16,7 +16,7 @@ YED_FLAGS  := $(shell yed --print-cppflags --print-ldflags)
 BIN        := .
 SRC        := ./src
 INCLUDE    := ./include
-EXECUTABLE := lsp_symbol_menu.so
+EXECUTABLE := lsp_symbol_buffer.so
 
 all: $(BIN)/$(EXECUTABLE)
 
