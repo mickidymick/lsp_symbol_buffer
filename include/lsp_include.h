@@ -1,31 +1,3 @@
-// A symbol kind.
-// File          = 1;
-// Module        = 2;
-// Namespace     = 3;
-// Package       = 4;
-// Class         = 5;
-// Method        = 6;
-// Property      = 7;
-// Field         = 8;
-// Constructor   = 9;
-// Enum          = 10;
-// Interface     = 11;
-// Function      = 12;
-// Variable      = 13;
-// Constant      = 14;
-// String        = 15;
-// Number        = 16;
-// Boolean       = 17;
-// Array         = 18;
-// Object        = 19;
-// Key           = 20;
-// Null          = 21;
-// EnumMember    = 22;
-// Struct        = 23;
-// Event         = 24;
-// Operator      = 25;
-// TypeParameter = 26;
-
 #ifndef LSP_INCLUDE_H
 #define LSP_INCLUDE_H
 
@@ -91,8 +63,6 @@ typedef struct {
     //side
     item       *declaration;
     item       *definition;
-    item       *type_definition;
-    item       *implementation;
     item       *references[1024];
     int         ref_size;
 } symbol;
@@ -103,7 +73,9 @@ extern yed_frame  *last_frame;
 extern symbol     *cur_symbol;
 extern array_t     symbols;
 extern position    pos;
+extern position    first_pos;
 extern string      uri;
+extern string      first_uri;
 extern string      symbol_buffer_name;
 extern time_t      last_time;
 extern time_t      wait_time;
@@ -112,6 +84,7 @@ extern int         tot;
 extern array_t     references;
 extern int         ref_loc;
 extern int         has_declaration;
+extern int         definition_num;
 
 /* global functions */
 static yed_buffer *_get_or_make_buff(void);
@@ -128,6 +101,7 @@ static yed_buffer *_get_or_make_buff(void) {
     buff = yed_get_buffer(SYM_BUFFER);
 
     if (buff == NULL) {
+        DBG("FUCK");
         buff = yed_create_buffer(SYM_BUFFER);
         buff->flags |= BUFF_RD_ONLY | BUFF_SPECIAL;
     }
@@ -190,16 +164,6 @@ static void _clear_symbol(void) {
         free(cur_symbol->definition);
     }
 
-    if (cur_symbol->type_definition != NULL) {
-        free(cur_symbol->type_definition->line);
-        free(cur_symbol->type_definition);
-    }
-
-    if (cur_symbol->implementation != NULL) {
-        free(cur_symbol->implementation->line);
-        free(cur_symbol->implementation);
-    }
-
     for (int i = 0; i < cur_symbol->ref_size; i++) {
         if (cur_symbol->references[i] != NULL) {
             free(cur_symbol->references[i]->line);
@@ -217,8 +181,6 @@ static void _init_symbol(void) {
     cur_symbol = (symbol *)malloc(sizeof(symbol));
     cur_symbol->declaration     = NULL;
     cur_symbol->definition      = NULL;
-    cur_symbol->type_definition = NULL;
-    cur_symbol->implementation  = NULL;
     cur_symbol->ref_size        = 0;
 }
 

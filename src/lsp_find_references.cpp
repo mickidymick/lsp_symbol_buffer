@@ -13,21 +13,6 @@ void find_references_cmd(int n_args, char **args) {
     lsp_find_references_now = 1;
     ref_loc                 = 0;
 
-    if (array_len(references) == 0) {
-        references = array_make(item *);
-
-    } else {
-        item **item_it;
-
-        if (array_len(references) > 0) {
-            array_traverse(references, item_it) {
-                free(*item_it);
-            }
-        }
-
-        array_clear(references);
-    }
-
     find_references_request(ys->active_frame);
 }
 
@@ -36,7 +21,7 @@ void goto_next_reference_cmd(int n_args, char **args) {
     string  tmp_str2 = "buffer";
     int     len;
 
-    len = array_len(references);
+    len = cur_symbol->ref_size;
 
     if (len < 2) {
         return;
@@ -44,7 +29,7 @@ void goto_next_reference_cmd(int n_args, char **args) {
 
     ref_loc++;
 
-    i = *(item **)array_item(references, ref_loc%len);
+    i = cur_symbol->references[ref_loc%len];
     YEXE((char *) tmp_str2.c_str(), i->buffer->path);
 
     if (ys->active_frame) {
@@ -57,7 +42,7 @@ void goto_prev_reference_cmd(int n_args, char **args) {
     string  tmp_str2 = "buffer";
     int     len;
 
-    len = array_len(references);
+    len = cur_symbol->ref_size;
 
     if (len < 2) {
         return;
@@ -69,7 +54,7 @@ void goto_prev_reference_cmd(int n_args, char **args) {
         ref_loc--;
     }
 
-    i = *(item **)array_item(references, ref_loc);
+    i = cur_symbol->references[ref_loc%len];
     YEXE((char *) tmp_str2.c_str(), i->buffer->path);
 
     if (ys->active_frame) {
@@ -177,12 +162,6 @@ void find_references_get_range(const json &result, yed_event *event) {
             return;
         }
 
-//         s                                   = *(symbol **)array_item(symbols, sub);
-//         s->references[s->ref_size]          = i;
-//         s->references[s->ref_size]->start   = col;
-//         s->references[s->ref_size]->end     = yed_line_idx_to_col(line, byte);
-//         s->references[s->ref_size]->num_len = to_string(row).length() + 1;
-
         cur_symbol->references[cur_symbol->ref_size]          = i;
         cur_symbol->references[cur_symbol->ref_size]->start   = col;
         cur_symbol->references[cur_symbol->ref_size]->end     = yed_line_idx_to_col(line, byte);
@@ -204,11 +183,8 @@ void find_references_get_range(const json &result, yed_event *event) {
         if (buffer1 != NULL) {
             buffer1->flags &= ~BUFF_RD_ONLY;
 
-            if (loc == 0) {
-                yed_buff_insert_string_no_undo(buffer1, "References", 12, 1);
-            }
             yed_buff_insert_string_no_undo(buffer1, tmp_str, 13 + loc, 1);
-            tot++;
+
             buffer1->flags |= BUFF_RD_ONLY;
         }
     }
@@ -229,6 +205,37 @@ void find_references_pmsg(yed_event *event) {
         auto j = json::parse(event->plugin_message.string_data);
 //         DBG("%s",j.dump(2).c_str());
         const auto &r = j["result"];
+
+        yed_buffer *buffer1 = _get_or_make_buff();
+        if (buffer1 != NULL) {
+            buffer1->flags &= ~BUFF_RD_ONLY;
+
+            if (cur_symbol->declaration == NULL) {
+                if (yed_buff_n_lines(buffer1) >= 7) {
+                    yed_line_clear_no_undo(buffer1, 6);
+                    yed_line_clear_no_undo(buffer1, 7);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "Declaration", 6, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 7, 1);
+            }
+
+            if (cur_symbol->definition == NULL) {
+                if (yed_buff_n_lines(buffer1) >= 10) {
+                    yed_line_clear_no_undo(buffer1, 9);
+                    yed_line_clear_no_undo(buffer1, 10);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "Definition", 9, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 10, 1);
+            }
+
+            if (yed_buff_n_lines(buffer1) >= 13) {
+                yed_line_clear_no_undo(buffer1, 12);
+                yed_line_clear_no_undo(buffer1, 13);
+            }
+            yed_buff_insert_string_no_undo(buffer1, "References", 12, 1);
+
+            buffer1->flags |= BUFF_RD_ONLY;
+        }
 
         if (r.is_array()) {
             for(loc = 0; loc < r.size(); loc++) {

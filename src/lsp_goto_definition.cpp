@@ -136,9 +136,30 @@ void goto_definition_get_range(const json &result, yed_event *event) {
         if (buffer1 != NULL) {
             buffer1->flags &= ~BUFF_RD_ONLY;
 
+            if (cur_symbol->declaration == NULL) {
+                if (yed_buff_n_lines(buffer1) >= 7) {
+                    yed_line_clear_no_undo(buffer1, 6);
+                    yed_line_clear_no_undo(buffer1, 7);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "Declaration", 6, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 7, 1);
+            }
+
+            if (yed_buff_n_lines(buffer1) >= 10) {
+                yed_line_clear_no_undo(buffer1, 9);
+                yed_line_clear_no_undo(buffer1, 10);
+            }
             yed_buff_insert_string_no_undo(buffer1, "Definition", 9, 1);
             yed_buff_insert_string_no_undo(buffer1, tmp_str, 10, 1);
-            tot++;
+
+            if (cur_symbol->ref_size == 0) {
+                if (yed_buff_n_lines(buffer1) >= 13) {
+                    yed_line_clear_no_undo(buffer1, 12);
+                    yed_line_clear_no_undo(buffer1, 13);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "References", 12, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 13, 1);
+            }
             buffer1->flags |= BUFF_RD_ONLY;
         }
 
@@ -174,12 +195,18 @@ void goto_definition_pmsg(yed_event *event) {
 
     } catch (...) {}
 
-//     if (lsp_goto_definition_now == 0 && array_len(symbols) > 0) {
     if (lsp_goto_definition_now == 0) {
-//         symbol *s = *(symbol **)array_item(symbols, sub);
         if (cur_symbol->declaration == NULL) {
             goto_declaration_request(last_frame);
         }
+
+//         if (cur_symbol->definition == NULL && definition_num == 0) {
+//             pos.line       = first_pos.line;
+//             pos.character  = first_pos.character;
+//             uri            = first_uri;
+//             definition_num = 1;
+//             goto_definition_request(last_frame);
+//         }
     }
 
     lsp_goto_definition_now = 0;
