@@ -1,4 +1,6 @@
+*.so
+*.bookmarks
+.yedrc
 .ccls-cache
 compile_commands.json
-lsp_symbol_menu.so
-*.bookmarks
+debug_build.sh
