@@ -102,7 +102,6 @@ static yed_buffer *_get_or_make_buff(void) {
     buff = yed_get_buffer(SYM_BUFFER);
 
     if (buff == NULL) {
-        DBG("FUCK");
         buff = yed_create_buffer(SYM_BUFFER);
         buff->flags |= BUFF_RD_ONLY | BUFF_SPECIAL;
     }
@@ -168,6 +167,7 @@ static void _clear_symbol(void) {
     for (int i = 0; i < cur_symbol->ref_size; i++) {
         if (cur_symbol->references[i] != NULL) {
             free(cur_symbol->references[i]->line);
+            free(cur_symbol->references[i]);
         }
     }
 
@@ -203,7 +203,7 @@ static void _clear_symbols(void) {
             for (int i = 0; i < (*symbol_it)->ref_size; i++) {
                 if ((*symbol_it)->references[i] != NULL) {
                     free((*symbol_it)->references[i]->line);
-//                     free((*symbol_it)->references[i]);
+                    free((*symbol_it)->references[i]);
                 }
             }
 

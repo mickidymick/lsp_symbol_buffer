@@ -13,6 +13,8 @@ void find_references_cmd(int n_args, char **args) {
     lsp_find_references_now = 1;
     ref_loc                 = 0;
 
+    _init_symbol();
+
     find_references_request(ys->active_frame);
 }
 
@@ -149,17 +151,13 @@ void find_references_get_range(const json &result, yed_event *event) {
         i->row    = row;
         i->col    = col;
 
-        if (lsp_find_references_now == 1) {
+        if (lsp_find_references_now == 1 && cur_symbol->ref_size == 0) {
             string tmp_str2 = "buffer";
             YEXE((char *) tmp_str2.c_str(), buffer->path);
 
             if (ys->active_frame) {
                 yed_move_cursor_within_frame(ys->active_frame, row - ys->active_frame->cursor_line, col - ys->active_frame->cursor_col);
             }
-
-            array_push(references, i);
-
-            return;
         }
 
         string str(buffer->name);
