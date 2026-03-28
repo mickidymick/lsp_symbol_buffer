@@ -82,6 +82,9 @@ void find_references_request(yed_frame *frame) {
             { "line",      pos.line      },
             { "character", pos.character },
         }},
+        { "context", {
+            { "includeDeclaration", false },
+        }},
     };
 
     yed_event event;

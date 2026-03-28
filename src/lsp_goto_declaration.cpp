@@ -155,9 +155,6 @@ void goto_declaration_get_range(const json &result, yed_event *event) {
             buffer1->flags |= BUFF_RD_ONLY;
         }
 
-        pos.line      = cur_symbol->declaration->row - 1;
-        pos.character = cur_symbol->declaration->col + 1;
-        uri           = b;
     }
 }
 
@@ -186,15 +183,6 @@ void goto_declaration_pmsg(yed_event *event) {
         }
 
     } catch (...) {}
-
-    if (lsp_goto_declaration_now == 0) {
-        if (cur_symbol->definition == NULL) {
-            first_pos.line      = pos.line;
-            first_pos.character = pos.character;
-            first_uri           = uri;
-            goto_definition_request(last_frame);
-        }
-    }
 
     lsp_goto_declaration_now = 0;
     event->cancel            = 1;

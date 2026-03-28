@@ -129,14 +129,12 @@ static void _lsp_search_symbol(int n_args, char **args) {
         buffer1->flags |= BUFF_RD_ONLY;
     }
 
-    // get declaration
-    // symbol declaration
+    // fire all three requests from the original position simultaneously
     goto_declaration_request(frame);
+    goto_definition_request(frame);
 
-    // get references
-    // any other location symbol is used
     cur_symbol->ref_size = 0;
-    find_references_request(last_frame);
+    find_references_request(frame);
 
     buffer1 = _get_or_make_buff();
     if (buffer1 != NULL) {

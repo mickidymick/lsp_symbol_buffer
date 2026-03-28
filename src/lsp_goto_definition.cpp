@@ -157,9 +157,6 @@ void goto_definition_get_range(const json &result, yed_event *event) {
             buffer1->flags |= BUFF_RD_ONLY;
         }
 
-        pos.line      = cur_symbol->definition->row - 1;
-        pos.character = cur_symbol->definition->col + 1;
-        uri           = b;
     }
 }
 
@@ -188,20 +185,6 @@ void goto_definition_pmsg(yed_event *event) {
         }
 
     } catch (...) {}
-
-    if (lsp_goto_definition_now == 0) {
-        if (cur_symbol->declaration == NULL) {
-            goto_declaration_request(last_frame);
-        }
-
-//         if (cur_symbol->definition == NULL && definition_num == 0) {
-//             pos.line       = first_pos.line;
-//             pos.character  = first_pos.character;
-//             uri            = first_uri;
-//             definition_num = 1;
-//             goto_definition_request(last_frame);
-//         }
-    }
 
     lsp_goto_definition_now = 0;
     event->cancel           = 1;
