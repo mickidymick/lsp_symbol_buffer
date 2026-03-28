@@ -27,6 +27,7 @@ static void _lsp_search_symbol(int n_args, char **args);
 static void _lsp_search_txt(int n_args, char **args);
 static void _lsp_search_txt_pmsg(yed_event *event);
 static int  _lsp_search_txt_completion(char *name, struct yed_completion_results_t *comp_res);
+static void _lsp_find_symbol_cmd(int n_args, char **args);
 static void _lsp_symbol_menu_select(void);
 static void _lsp_symbol_menu_line_handler(yed_event *event);
 static void _lsp_symbol_menu_key_pressed_handler(yed_event *event);
@@ -68,6 +69,7 @@ int yed_plugin_boot(yed_plugin *self) {
     map<const char*, void(*)(int, char**)> cmds = {
         { "lsp-search-symbol",        _lsp_search_symbol},
         { "lsp-search-txt",           _lsp_search_txt},
+        { "lsp-find-symbol",          _lsp_find_symbol_cmd},
         { "lsp-goto-declaration",     goto_declaration_cmd},
         { "lsp-goto-definition",      goto_definition_cmd},
         { "lsp-find-references",      find_references_cmd},
@@ -241,6 +243,158 @@ static void _lsp_search_txt(int n_args, char **args) {
     event.ft                         = frame->buffer->ft;
 
     yed_trigger_event(&event);
+}
+
+static void _rebuild_buf_words_from(yed_buffer *buf) {
+    char       **it;
+    set<string>  seen;
+
+    array_traverse(_buf_words, it) { free(*it); }
+    array_clear(_buf_words);
+
+    if (buf == NULL || (buf->flags & BUFF_SPECIAL)) { return; }
+
+    int nlines = yed_buff_n_lines(buf);
+    for (int row = 1; row <= nlines; row++) {
+        char *text = yed_get_line_text(buf, row);
+        if (text == NULL) { continue; }
+        char *p = text;
+        while (*p) {
+            if (isalnum((unsigned char)*p) || *p == '_') {
+                char *start = p;
+                while (isalnum((unsigned char)*p) || *p == '_') { p++; }
+                int len = (int)(p - start);
+                if (len > 1 && len < 256) {
+                    char word[256];
+                    memcpy(word, start, len);
+                    word[len] = '\0';
+                    if (seen.insert(string(word)).second) {
+                        char *cpy = strdup(word);
+                        array_push(_buf_words, cpy);
+                    }
+                }
+            } else {
+                p++;
+            }
+        }
+        free(text);
+    }
+}
+
+static yed_buffer *_get_or_make_find_sym_buff(void) {
+    yed_buffer *buff = yed_get_buffer("*lsp-find-symbol");
+    if (buff == NULL) {
+        buff = yed_create_buffer("*lsp-find-symbol");
+        buff->flags |= BUFF_RD_ONLY | BUFF_SPECIAL;
+    }
+    return buff;
+}
+
+static void _lsp_find_symbol_run(void) {
+    yed_buffer       *buff = _get_or_make_find_sym_buff();
+    char            **it;
+    set<string>       shown;
+    vector<string>    matches;
+
+    array_zero_term(ys->cmd_buff);
+    char   *pattern = (char *)array_data(ys->cmd_buff);
+    string  pat(pattern);
+
+    buff->flags &= ~BUFF_RD_ONLY;
+    yed_buff_clear_no_undo(buff);
+
+    if (pat.size() > 0) {
+        array_traverse(_ws_symbol_names, it) {
+            string name(*it);
+            if (name.find(pat) == 0 && shown.insert(name).second) {
+                matches.push_back(name);
+            }
+        }
+        array_traverse(_buf_words, it) {
+            string name(*it);
+            if (name.find(pat) == 0 && shown.insert(name).second) {
+                matches.push_back(name);
+            }
+        }
+
+        sort(matches.begin(), matches.end());
+
+        int row = 1;
+        for (const string &m : matches) {
+            if (row > 50) { break; }
+            yed_buff_insert_string_no_undo(buff, (char *)m.c_str(), row, 1);
+            row++;
+        }
+    }
+
+    buff->flags |= BUFF_RD_ONLY;
+}
+
+static void _lsp_find_symbol_select(void) {
+    char query_copy[512];
+
+    array_zero_term(ys->cmd_buff);
+    snprintf(query_copy, sizeof(query_copy), "%s", (char *)array_data(ys->cmd_buff));
+
+    ys->interactive_command = NULL;
+    yed_clear_cmd_buff();
+    YEXE("special-buffer-prepare-unfocus", "*lsp-find-symbol");
+
+    if (strlen(query_copy) > 0) {
+        YEXE("lsp-search-txt", query_copy);
+    }
+}
+
+static void _lsp_find_symbol_take_key(int key) {
+    switch (key) {
+        case ESC:
+        case CTRL_C:
+            ys->interactive_command = NULL;
+            ys->current_search      = NULL;
+            yed_clear_cmd_buff();
+            YEXE("special-buffer-prepare-unfocus", "*lsp-find-symbol");
+            break;
+        case ENTER:
+            _lsp_find_symbol_select();
+            break;
+        default:
+            yed_cmd_line_readline_take_key(NULL, key);
+            array_zero_term(ys->cmd_buff);
+            _lsp_find_symbol_run();
+            break;
+    }
+}
+
+static void _lsp_find_symbol_cmd(int n_args, char **args) {
+    yed_frame *frame;
+    int        key;
+
+    if (!ys->interactive_command) {
+        frame = ys->active_frame;
+
+        // Build buf_words now before we switch away from the code buffer
+        if (frame && frame->buffer && !(frame->buffer->flags & BUFF_SPECIAL)) {
+            _buf_words_buf   = frame->buffer;
+            _buf_words_dirty = 0;
+            _rebuild_buf_words_from(frame->buffer);
+        }
+
+        ys->interactive_command = "lsp-find-symbol";
+        ys->cmd_prompt          = "(lsp-find-symbol) ";
+
+        yed_buffer *buff = _get_or_make_find_sym_buff();
+        buff->flags &= ~BUFF_RD_ONLY;
+        yed_buff_clear_no_undo(buff);
+        buff->flags |= BUFF_RD_ONLY;
+
+        YEXE("special-buffer-prepare-focus", "*lsp-find-symbol");
+        yed_frame_set_buff(ys->active_frame, buff);
+        yed_set_cursor_far_within_frame(ys->active_frame, 1, 1);
+        yed_clear_cmd_buff();
+    } else {
+        sscanf(args[0], "%d", &key);
+        _lsp_find_symbol_take_key(key);
+    }
 }
 
 static void _lsp_search_txt_pmsg(yed_event *event) {
@@ -450,49 +604,17 @@ static int _lsp_search_txt_completion(char *name, struct yed_completion_results_
     int      ret;
     array_t  combined;
     char   **it;
-    set<string> seen;
 
     // rebuild buf_words from the active buffer only on the first Tab of each command invocation
     if (_buf_words_dirty) {
         _buf_words_dirty = 0;
-
-        array_traverse(_buf_words, it) { free(*it); }
-        array_clear(_buf_words);
 
         yed_buffer *scan_buf = _buf_words_buf;
         if (scan_buf == NULL && ys->active_frame && ys->active_frame->buffer
         && !(ys->active_frame->buffer->flags & BUFF_SPECIAL)) {
             scan_buf = ys->active_frame->buffer;
         }
-
-        if (scan_buf != NULL && !(scan_buf->flags & BUFF_SPECIAL)) {
-            yed_buffer *buf    = scan_buf;
-            int         nlines = yed_buff_n_lines(buf);
-            for (int row = 1; row <= nlines; row++) {
-                char *text = yed_get_line_text(buf, row);
-                if (text == NULL) { continue; }
-                char *p = text;
-                while (*p) {
-                    if (isalnum((unsigned char)*p) || *p == '_') {
-                        char *start = p;
-                        while (isalnum((unsigned char)*p) || *p == '_') { p++; }
-                        int len = (int)(p - start);
-                        if (len > 1 && len < 256) {
-                            char word[256];
-                            memcpy(word, start, len);
-                            word[len] = '\0';
-                            if (seen.insert(string(word)).second) {
-                                char *cpy = strdup(word);
-                                array_push(_buf_words, cpy);
-                            }
-                        }
-                    } else {
-                        p++;
-                    }
-                }
-                free(text);
-            }
-        }
+        _rebuild_buf_words_from(scan_buf);
     }
 
     // merge: LSP symbols first, then buffer words not already in LSP list
@@ -651,21 +773,24 @@ static void _lsp_symbol_menu_line_handler(yed_event *event) {
 }
 
 static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
-  yed_frame *eframe;
+    yed_frame *eframe;
 
     eframe = ys->active_frame;
 
     if (event->key != ENTER
     ||  ys->interactive_command
     ||  !eframe
-    ||  !eframe->buffer
-    ||  strcmp(eframe->buffer->name, SYM_BUFFER)) {
+    ||  !eframe->buffer) {
         return;
     }
 
-    _lsp_symbol_menu_select();
-
-    event->cancel = 1;
+    if (strcmp(eframe->buffer->name, SYM_BUFFER) == 0) {
+        _lsp_symbol_menu_select();
+        event->cancel = 1;
+    } else if (strcmp(eframe->buffer->name, "*lsp-find-symbol") == 0) {
+        _lsp_find_symbol_select();
+        event->cancel = 1;
+    }
 }
 
 static void _lsp_symbol_menu_unload(yed_plugin *self) {
