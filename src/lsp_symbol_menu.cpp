@@ -24,10 +24,22 @@ int         definition_num;
 
 /* internal functions*/
 static void _lsp_search_symbol(int n_args, char **args);
+static void _lsp_search_txt(int n_args, char **args);
+static void _lsp_search_txt_pmsg(yed_event *event);
+static int  _lsp_search_txt_completion(char *name, struct yed_completion_results_t *comp_res);
 static void _lsp_symbol_menu_select(void);
 static void _lsp_symbol_menu_line_handler(yed_event *event);
 static void _lsp_symbol_menu_key_pressed_handler(yed_event *event);
 static void _lsp_symbol_menu_unload(yed_plugin *self);
+
+static string      _ws_query;
+static int         _ws_pending = 0;
+static array_t     _ws_symbol_names;
+static set<string> _ws_symbol_name_set;
+static array_t     _buf_words;
+static int         _buf_words_dirty = 1;
+static yed_buffer *_buf_words_buf   = NULL;
+static set<int>    _ws_seeded_fts;
 
 extern "C"
 int yed_plugin_boot(yed_plugin *self) {
@@ -36,11 +48,12 @@ int yed_plugin_boot(yed_plugin *self) {
     Self = self;
 
     map<void(*)(yed_event*), vector<yed_event_kind_t> > event_handlers = {
-        { goto_declaration_pmsg,                { EVENT_PLUGIN_MESSAGE } },
-        { goto_definition_pmsg,                 { EVENT_PLUGIN_MESSAGE } },
-        { find_references_pmsg,                 { EVENT_PLUGIN_MESSAGE } },
-        { _lsp_symbol_menu_key_pressed_handler, { EVENT_KEY_PRESSED }    },
-        { _lsp_symbol_menu_line_handler,        { EVENT_LINE_PRE_DRAW }  },
+        { goto_declaration_pmsg,                { EVENT_PLUGIN_MESSAGE }   },
+        { goto_definition_pmsg,                 { EVENT_PLUGIN_MESSAGE }   },
+        { find_references_pmsg,                 { EVENT_PLUGIN_MESSAGE }   },
+        { _lsp_search_txt_pmsg,                 { EVENT_PLUGIN_MESSAGE }   },
+        { _lsp_symbol_menu_key_pressed_handler, { EVENT_KEY_PRESSED }      },
+        { _lsp_symbol_menu_line_handler,        { EVENT_LINE_PRE_DRAW }    },
     };
 
     for (auto &pair : event_handlers) {
@@ -54,6 +67,7 @@ int yed_plugin_boot(yed_plugin *self) {
 
     map<const char*, void(*)(int, char**)> cmds = {
         { "lsp-search-symbol",        _lsp_search_symbol},
+        { "lsp-search-txt",           _lsp_search_txt},
         { "lsp-goto-declaration",     goto_declaration_cmd},
         { "lsp-goto-definition",      goto_definition_cmd},
         { "lsp-find-references",      find_references_cmd},
@@ -64,6 +78,10 @@ int yed_plugin_boot(yed_plugin *self) {
     for (auto &pair : cmds) {
         yed_plugin_set_command(self, pair.first, pair.second);
     }
+
+    _ws_symbol_names = array_make(char *);
+    _buf_words       = array_make(char *);
+    yed_plugin_set_completion(self, "lsp-search-txt-compl-arg-0", _lsp_search_txt_completion);
 
     /* Fake cursor move so that it works on startup/reload. */
     yed_move_cursor_within_active_frame(0, 0);
@@ -169,6 +187,335 @@ static void _lsp_search_symbol(int n_args, char **args) {
         buffer1->flags |= BUFF_RD_ONLY;
     }
 }
+
+static void _lsp_search_txt(int n_args, char **args) {
+    yed_buffer *buffer1;
+    yed_frame  *frame;
+
+    if (n_args < 1) { return; }
+
+    frame = ys->active_frame;
+    if (frame == NULL || frame->buffer == NULL) { return; }
+
+    last_frame       = frame;
+    _ws_query        = args[0];
+    _ws_pending      = 1;
+    _buf_words_buf   = frame->buffer;
+    _buf_words_dirty = 1;
+
+    if (array_len(symbols) == 0) {
+        symbols = array_make(symbol *);
+    }
+
+    string tmp_str1 = "special-buffer-prepare-focus";
+    YEXE((char *) tmp_str1.c_str(), SYM_BUFFER);
+
+    if (ys->active_frame) {
+        string tmp_str2 = "buffer";
+        YEXE((char *) tmp_str2.c_str(), SYM_BUFFER);
+    }
+
+    yed_set_cursor_far_within_frame(ys->active_frame, 1, 1);
+
+    _init_symbol();
+
+    buffer1 = _get_or_make_buff();
+    if (buffer1 != NULL) {
+        buffer1->flags &= ~BUFF_RD_ONLY;
+        yed_buff_clear(buffer1);
+        yed_buff_insert_string_no_undo(buffer1, "Symbol Menu", 1, 1);
+        buffer1->flags |= BUFF_RD_ONLY;
+    }
+
+    json params = {
+        { "query", _ws_query },
+    };
+
+    yed_event event;
+    string    text = params.dump();
+
+    event.kind                       = EVENT_PLUGIN_MESSAGE;
+    event.plugin_message.message_id  = "lsp-request:workspace/symbol";
+    event.plugin_message.plugin_id   = "lsp_symbol_menu";
+    event.plugin_message.string_data = text.c_str();
+    event.ft                         = frame->buffer->ft;
+
+    yed_trigger_event(&event);
+}
+
+static void _lsp_search_txt_pmsg(yed_event *event) {
+    yed_buffer *buffer1;
+
+    if (strcmp(event->plugin_message.plugin_id, "lsp") != 0
+    ||  strcmp(event->plugin_message.message_id, "workspace/symbol") != 0) {
+        return;
+    }
+
+    try {
+        auto j = json::parse(event->plugin_message.string_data);
+        const auto &r = j["result"];
+
+        // always update completion cache with any symbol names returned
+        if (r.is_array()) {
+            for (const auto &sym : r) {
+                if (sym.contains("name")) {
+                    string sname = sym["name"];
+                    if (_ws_symbol_name_set.insert(sname).second) {
+                        char *cpy = strdup(sname.c_str());
+                        array_push(_ws_symbol_names, cpy);
+                    }
+                }
+            }
+        }
+
+        if (!_ws_pending) {
+            event->cancel = 1;
+            return;
+        }
+        _ws_pending = 0;
+
+        if (!r.is_array() || r.empty()) {
+            buffer1 = _get_or_make_buff();
+            if (buffer1 != NULL) {
+                buffer1->flags &= ~BUFF_RD_ONLY;
+                yed_buff_insert_string_no_undo(buffer1, "Declaration", 6, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found",  7, 1);
+                yed_buff_insert_string_no_undo(buffer1, "Definition",  9, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found",  10, 1);
+                yed_buff_insert_string_no_undo(buffer1, "References",  12, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found",  13, 1);
+                buffer1->flags |= BUFF_RD_ONLY;
+            }
+            event->cancel = 1;
+            return;
+        }
+
+        // prefer exact name match, fall back to first result
+        const json *best = &r[0];
+        for (const auto &sym : r) {
+            if (sym.contains("name") && sym["name"] == _ws_query) {
+                best = &sym;
+                break;
+            }
+        }
+
+        if (!best->contains("location")) {
+            event->cancel = 1;
+            return;
+        }
+
+        const auto &loc_json = (*best)["location"];
+        uri           = loc_json["uri"];
+        pos.line      = loc_json["range"]["start"]["line"];
+        pos.character = loc_json["range"]["start"]["character"];
+
+        definition_num = 0;
+
+        // Populate definition directly from workspace/symbol location.
+        // textDocument/definition from a definition site returns null in clangd.
+        {
+            // Convert URI to path: strip "file://" prefix
+            string raw_uri = uri;
+            string path_str;
+            if (raw_uri.substr(0, 7) == "file://") {
+                path_str = raw_uri.substr(7);
+            } else {
+                path_str = raw_uri;
+            }
+
+            char a_path[512], r_path[512], h_path[512];
+            char *name;
+            abs_path((char *)path_str.c_str(), a_path);
+            relative_path_if_subtree(a_path, r_path);
+            if (homeify_path(r_path, h_path)) {
+                name = h_path;
+            } else {
+                name = r_path;
+            }
+
+            string tmp_hidden = "buffer-hidden";
+            YEXE((char *)tmp_hidden.c_str(), name);
+            yed_buffer *def_buf = yed_get_buffer(name);
+
+            if (def_buf != NULL) {
+                int def_row  = (int)pos.line + 1;      // pos.line is 0-indexed
+                int def_byte = (int)pos.character;
+                yed_line *def_line = yed_buff_get_line(def_buf, def_row);
+
+                if (def_line != NULL) {
+                    int def_col     = yed_line_idx_to_col(def_line, def_byte);
+                    int def_end_col = def_col; // end unknown from workspace/symbol; use same
+
+                    cur_symbol->definition           = (item *)malloc(sizeof(item));
+                    cur_symbol->definition->buffer   = def_buf;
+                    cur_symbol->definition->line     = yed_get_line_text(def_buf, def_row);
+                    cur_symbol->definition->row      = def_row;
+                    cur_symbol->definition->col      = def_col;
+                    cur_symbol->definition->start    = def_col;
+                    cur_symbol->definition->end      = def_end_col;
+                    cur_symbol->definition->num_len  = (int)to_string(def_row).length() + 1;
+
+                    string str(def_buf->name);
+                    cur_symbol->definition->name_len = (int)str.size();
+
+                    char tmp_str[512];
+                    char *raw_line = cur_symbol->definition->line;
+                    char *trimmed  = trim_leading_whitespace(raw_line);
+                    int   ws_off   = (int)(trimmed - raw_line);
+                    sprintf(tmp_str, "%s:%d:%s", def_buf->name, def_row, trimmed);
+
+                    cur_symbol->definition->start = def_col - ws_off;
+                    cur_symbol->definition->end   = def_end_col - ws_off;
+
+                    buffer1 = _get_or_make_buff();
+                    if (buffer1 != NULL) {
+                        buffer1->flags &= ~BUFF_RD_ONLY;
+                        if (yed_buff_n_lines(buffer1) >= 10) {
+                            yed_line_clear_no_undo(buffer1, 9);
+                            yed_line_clear_no_undo(buffer1, 10);
+                        }
+                        yed_buff_insert_string_no_undo(buffer1, "Definition", 9, 1);
+                        yed_buff_insert_string_no_undo(buffer1, tmp_str, 10, 1);
+                        buffer1->flags |= BUFF_RD_ONLY;
+                    }
+                }
+            }
+        }
+
+        // server is confirmed running — seed the completion cache if not done yet
+        if (last_frame != NULL && last_frame->buffer != NULL) {
+            int ft = last_frame->buffer->ft;
+            if (ft != FT_UNKNOWN && !_ws_seeded_fts.count(ft)) {
+                _ws_seeded_fts.insert(ft);
+
+                json      seed_params = { { "query", "" } };
+                yed_event seed_event;
+                string    seed_text   = seed_params.dump();
+
+                seed_event.kind                       = EVENT_PLUGIN_MESSAGE;
+                seed_event.plugin_message.message_id  = "lsp-request:workspace/symbol";
+                seed_event.plugin_message.plugin_id   = "lsp_symbol_menu";
+                seed_event.plugin_message.string_data = seed_text.c_str();
+                seed_event.ft                         = ft;
+
+                yed_trigger_event(&seed_event);
+            }
+        }
+
+        goto_declaration_request(last_frame);
+
+        cur_symbol->ref_size = 0;
+        find_references_request(last_frame);
+
+        buffer1 = _get_or_make_buff();
+        if (buffer1 != NULL) {
+            buffer1->flags &= ~BUFF_RD_ONLY;
+
+            if (cur_symbol->declaration == NULL) {
+                if (yed_buff_n_lines(buffer1) >= 7) {
+                    yed_line_clear_no_undo(buffer1, 6);
+                    yed_line_clear_no_undo(buffer1, 7);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "Declaration", 6, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found",  7, 1);
+            }
+
+            if (cur_symbol->definition == NULL) {
+                if (yed_buff_n_lines(buffer1) >= 10) {
+                    yed_line_clear_no_undo(buffer1, 9);
+                    yed_line_clear_no_undo(buffer1, 10);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "Definition", 9, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 10, 1);
+            }
+
+            if (cur_symbol->ref_size == 0) {
+                if (yed_buff_n_lines(buffer1) >= 13) {
+                    yed_line_clear_no_undo(buffer1, 12);
+                    yed_line_clear_no_undo(buffer1, 13);
+                }
+                yed_buff_insert_string_no_undo(buffer1, "References", 12, 1);
+                yed_buff_insert_string_no_undo(buffer1, "None Found", 13, 1);
+            }
+
+            buffer1->flags |= BUFF_RD_ONLY;
+        }
+
+    } catch (...) {}
+
+    event->cancel = 1;
+}
+
+static int _lsp_search_txt_completion(char *name, struct yed_completion_results_t *comp_res) {
+    int      ret;
+    array_t  combined;
+    char   **it;
+    set<string> seen;
+
+    // rebuild buf_words from the active buffer only on the first Tab of each command invocation
+    if (_buf_words_dirty) {
+        _buf_words_dirty = 0;
+
+        array_traverse(_buf_words, it) { free(*it); }
+        array_clear(_buf_words);
+
+        yed_buffer *scan_buf = _buf_words_buf;
+        if (scan_buf == NULL && ys->active_frame && ys->active_frame->buffer
+        && !(ys->active_frame->buffer->flags & BUFF_SPECIAL)) {
+            scan_buf = ys->active_frame->buffer;
+        }
+
+        if (scan_buf != NULL && !(scan_buf->flags & BUFF_SPECIAL)) {
+            yed_buffer *buf    = scan_buf;
+            int         nlines = yed_buff_n_lines(buf);
+            for (int row = 1; row <= nlines; row++) {
+                char *text = yed_get_line_text(buf, row);
+                if (text == NULL) { continue; }
+                char *p = text;
+                while (*p) {
+                    if (isalnum((unsigned char)*p) || *p == '_') {
+                        char *start = p;
+                        while (isalnum((unsigned char)*p) || *p == '_') { p++; }
+                        int len = (int)(p - start);
+                        if (len > 1 && len < 256) {
+                            char word[256];
+                            memcpy(word, start, len);
+                            word[len] = '\0';
+                            if (seen.insert(string(word)).second) {
+                                char *cpy = strdup(word);
+                                array_push(_buf_words, cpy);
+                            }
+                        }
+                    } else {
+                        p++;
+                    }
+                }
+                free(text);
+            }
+        }
+    }
+
+    // merge: LSP symbols first, then buffer words not already in LSP list
+    combined = array_make(char *);
+    set<string> combined_seen;
+
+    array_traverse(_ws_symbol_names, it) {
+        if (combined_seen.insert(string(*it)).second) {
+            array_push(combined, *it);
+        }
+    }
+    array_traverse(_buf_words, it) {
+        if (combined_seen.insert(string(*it)).second) {
+            array_push(combined, *it);
+        }
+    }
+
+    FN_BODY_FOR_COMPLETE_FROM_ARRAY(name, array_len(combined), (char **)array_data(combined), comp_res, ret);
+
+    array_free(combined);   // strings are owned by _ws_symbol_names / _buf_words, not freed here
+    return ret;
+}
+
 
 static void _lsp_symbol_menu_select(void) {
     symbol *s;
@@ -322,7 +669,16 @@ static void _lsp_symbol_menu_key_pressed_handler(yed_event *event) {
 }
 
 static void _lsp_symbol_menu_unload(yed_plugin *self) {
+    char **n;
+
     if (cur_symbol != NULL) {
         _clear_symbol();
     }
+
+    array_traverse(_ws_symbol_names, n) { free(*n); }
+    array_free(_ws_symbol_names);
+    _ws_symbol_name_set.clear();
+
+    array_traverse(_buf_words, n) { free(*n); }
+    array_free(_buf_words);
 }

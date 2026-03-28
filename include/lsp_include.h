@@ -10,6 +10,7 @@ extern "C" {
 #include <iostream>
 #include <sstream>
 #include <map>
+#include <set>
 #include <vector>
 #include <memory>
 
