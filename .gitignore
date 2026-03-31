@@ -1,5 +1,5 @@
 *.idx
-*.so
+*.so*
 *.bookmarks
 .yedrc
 .ccls-cache

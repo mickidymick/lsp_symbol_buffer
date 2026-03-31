@@ -119,6 +119,8 @@ static void _lsp_search_symbol(int n_args, char **args) {
 
     frame = ys->active_frame;
 
+    if (frame == NULL || frame->buffer == NULL) { return; }
+
     if (array_len(symbols) == 0) {
         symbols = array_make(symbol *);
     }
